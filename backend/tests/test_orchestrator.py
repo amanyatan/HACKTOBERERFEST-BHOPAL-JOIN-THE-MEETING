@@ -35,6 +35,15 @@ def test_failing_tester_triggers_fix_then_passes():
     assert events[-1]["passed"] is True and events[-1]["rounds"] == 1
 
 
+def test_a_host_without_a_browser_still_finishes_the_build_and_says_it_was_not_tested():
+    def no_browser(url):
+        raise RuntimeError("Browser testing is not available on this host")
+
+    events = list(build_and_test("brief", lambda c, f, p: FILES, lambda f: {"id": "a", "url": "/sites/a/"}, no_browser, lambda c, f, r: 1 / 0))
+    assert events[-1]["final"] and events[-1]["passed"] is None and events[-1]["status"] == "Not verified"
+    assert any(e["status"] == "Test skipped" for e in events)
+
+
 def test_gives_up_after_two_fix_rounds_and_says_so():
     bad = {"ok": False, "issues": ["still broken"], "summary": "bad"}
     events, calls = run([bad, bad, bad])

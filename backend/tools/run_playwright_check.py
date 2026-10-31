@@ -1,10 +1,24 @@
-from playwright.sync_api import sync_playwright
+import importlib.util
+import os
 
 MAX_SHOT_HEIGHT = 4000
 
 
+class BrowserUnavailable(RuntimeError):
+    pass
+
+
+def available() -> bool:
+    """Real-browser testing needs Playwright's Chromium, which serverless hosts such as Vercel cannot run."""
+    return not os.getenv("VERCEL") and importlib.util.find_spec("playwright") is not None
+
+
 def run_playwright_check(url: str) -> dict:
     """Open the page, scroll it (so scroll-reveal sections show), collect console errors, take a full-page JPEG."""
+    if not available():
+        raise BrowserUnavailable("Browser testing is not available on this host")
+    from playwright.sync_api import sync_playwright  # imported here so the app still starts without Playwright installed
+
     errors, failed = [], []
     with sync_playwright() as p:
         browser = p.chromium.launch()

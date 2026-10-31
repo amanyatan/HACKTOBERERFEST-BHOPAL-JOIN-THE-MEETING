@@ -42,5 +42,17 @@ def insert(table: str, row: dict) -> None:
     _request("POST", table, json=row, headers={"Prefer": "return=minimal"})
 
 
+def upsert(table: str, row: dict, conflict: str) -> None:
+    """Insert, or update the existing row with the same `conflict` column. Columns not in `row` are left alone."""
+    _request("POST", table, json=row, params={"on_conflict": conflict},
+             headers={"Prefer": "resolution=merge-duplicates,return=minimal"})
+
+
+def site_files(site_id: str) -> list[dict] | None:
+    """The saved files of a site by its (unguessable) id, or None. Callers must validate site_id first."""
+    rows = select("sites", {"select": "files", "site_id": f"eq.{site_id}", "limit": "1"})
+    return rows[0]["files"] if rows else None
+
+
 def select(table: str, params: dict) -> list[dict]:
     return _request("GET", table, params=params).json()

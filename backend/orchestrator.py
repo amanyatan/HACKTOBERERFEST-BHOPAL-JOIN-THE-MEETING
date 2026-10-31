@@ -22,7 +22,7 @@ def build_and_test(context, dev_build, save, check, review):
         try:
             report = check(site["url"])
         except Exception:
-            yield _ev("tester", "Could not open the site", "Automated test skipped")
+            yield _ev("tester", "Test skipped", "The automated browser test could not run here")
             verdict = {"ok": None, "issues": [], "summary": "Automated test could not run"}
             break
         yield _ev("tester", "Reviewing the screenshot", "Checking layout, text and console errors",

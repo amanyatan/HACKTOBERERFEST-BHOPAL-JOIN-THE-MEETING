@@ -3,6 +3,8 @@ import json
 import os
 import re
 import secrets
+import tempfile
+import threading
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -11,7 +13,7 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -21,30 +23,50 @@ from deploy_flow import deploy_site
 from orchestrator import build_and_test
 from personas import PERSONAS, live_config
 from tools import github_push, vercel_deploy
+from tools.run_playwright_check import available as browser_available
 from tools.run_playwright_check import run_playwright_check
 from tools.write_files import InvalidFiles, validate, write_files
 
-load_dotenv(Path(__file__).parent / ".env")
+ON_VERCEL = bool(os.getenv("VERCEL"))
+ROOT = Path(__file__).resolve().parent.parent
+if not ON_VERCEL:
+    load_dotenv(ROOT / "backend" / ".env")  # on Vercel the project's environment variables are the only source
 
-# Verified to open a Live audio session with an ephemeral token; override with LIVE_MODEL in .env.
+# Verified to open a Live audio session with an ephemeral token; override with LIVE_MODEL.
 LIVE_MODEL = os.getenv("LIVE_MODEL", "gemini-3.8-live")
-FRONTEND = Path(__file__).parent.parent / "frontend"
-SITES = Path(__file__).parent.parent / "generated"
-SITES.mkdir(exist_ok=True)
+PUBLIC = ROOT / "public"  # the website itself; Vercel serves this folder from its CDN
 
-# Generated sites are untrusted: no network calls, no framing by other origins, no forms posting out.
+
+def _sites_dir() -> Path:
+    """Generated sites live here. Serverless filesystems are read-only apart from the temp directory."""
+    tmp = Path(tempfile.gettempdir()) / "generated"
+    for candidate in ([tmp] if ON_VERCEL else [ROOT / "generated", tmp]):
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except OSError:
+            continue
+    raise RuntimeError("No writable folder for generated sites")
+
+
+SITES = _sites_dir()
+
+# Generated sites are untrusted: no network calls, no forms posting out, nothing but themselves.
 SITE_CSP = (
     "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src https://fonts.gstatic.com data:; img-src 'self' data: https://picsum.photos https://fastly.picsum.photos; "
     "connect-src 'none'; form-action 'none'; base-uri 'none'"
 )
+SITE_HEADERS = {"Content-Security-Policy": SITE_CSP, "X-Content-Type-Options": "nosniff", "Cache-Control": "no-cache"}
+ANON_CLIENT = "00000000-0000-0000-0000-000000000000"  # owner of sites built without a client id
 
 app = FastAPI()
 _hits: dict[str, deque] = defaultdict(deque)
 
 
 def rate_limit(ip: str, limit: int = 10, window: int = 60, bucket: str = "") -> None:
-    # shortcut: in-memory per process, fine for one local server; use Redis if scaled out.
+    # shortcut: in-memory, so per process. On a serverless host each instance counts separately, which makes this a soft
+    # limit; use a shared store (Redis, the database) if you need a hard one.
     now = time.monotonic()
     q = _hits[f"{bucket}:{ip}"]
     while q and now - q[0] > window:
@@ -55,6 +77,11 @@ def rate_limit(ip: str, limit: int = 10, window: int = 60, bucket: str = "") -> 
 
 
 def _ip(request: Request) -> str:
+    if ON_VERCEL:  # behind Vercel's proxy request.client is the proxy, so every visitor would share one counter
+        for name in ("x-vercel-forwarded-for", "x-real-ip", "x-forwarded-for"):
+            value = request.headers.get(name)
+            if value:
+                return value.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -99,23 +126,43 @@ def _db_call(fn, raw_cid: str):
         raise HTTPException(502, str(e))
 
 
-def _restore_site(site_id: str, cid: str) -> bool:
-    """Re-create generated/<site_id> from the saved copy, e.g. after a server restart."""
-    if not cid or not db.configured():
-        return False
-    try:
-        rows = db.select("sites", {"select": "files", "client_id": f"eq.{cid}", "site_id": f"eq.{site_id}", "limit": "1"})
-        if not rows:
-            return False
-        write_files(SITES / site_id, rows[0]["files"])
-        return True
-    except (db.DbError, InvalidFiles):
-        return False
+RESTORE_TTL = 5.0  # seconds a copy restored from the database is trusted before it is checked again
+_restored_at: dict[str, float] = {}
+_site_locks: defaultdict = defaultdict(threading.Lock)
+
+
+def _ensure_site(site_id: str) -> Path | None:
+    """Folder holding a site's files. Serverless instances do not share a disk, so a site written by one request may be
+    asked for from another instance: restore it from the database, and re-check a restored copy every few seconds so a
+    later fix round is picked up. Callers must have validated site_id."""
+    root = SITES / site_id
+    with _site_locks[site_id]:
+        restored = _restored_at.get(site_id)
+        if root.is_dir() and (restored is None or time.monotonic() - restored < RESTORE_TTL):
+            return root  # written by this instance, or restored moments ago
+        if db.configured():
+            try:
+                files = db.site_files(site_id)
+                if files:
+                    write_files(root, files)  # validates paths and sizes again
+                    _restored_at[site_id] = time.monotonic()
+                    return root
+            except (db.DbError, InvalidFiles, OSError):
+                pass  # a slightly stale copy beats an error
+        return root if root.is_dir() else None
 
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "key_configured": bool(os.getenv("GEMINI_API_KEY"))}
+    return {
+        "ok": True,
+        "key_configured": bool(os.getenv("GEMINI_API_KEY")),
+        "cutu_configured": bool(os.getenv("GEMINI_API_KEY_BOT")),
+        "database": db.configured(),
+        "deploy_configured": bool(os.getenv("GITHUB_TOKEN") and os.getenv("VERCEL_TOKEN")),
+        "browser_tests": browser_available(),
+        "vercel": ON_VERCEL,
+    }
 
 
 class TokenReq(BaseModel):
@@ -130,7 +177,7 @@ def token(request: Request, req: TokenReq = TokenReq()):
     rate_limit(_ip(request), bucket="token")
     key = os.getenv("GEMINI_API_KEY_BOT" if req.agent == "cutu" else "GEMINI_API_KEY")
     if not key:
-        raise HTTPException(503, "Cutu is not configured" if req.agent == "cutu" else "GEMINI_API_KEY not set in backend/.env")
+        raise HTTPException(503, "Cutu is not configured" if req.agent == "cutu" else "GEMINI_API_KEY is not set")
     from google import genai
 
     client = genai.Client(api_key=key, http_options={"api_version": "v1alpha"})
@@ -159,7 +206,8 @@ def sse(events, agent: str, fail_status: str) -> StreamingResponse:
             msg = f"Generated files rejected: {e}" if isinstance(e, InvalidFiles) else fail_status
             yield f"data: {json.dumps({'agent': agent, 'status': fail_status, 'message': msg, 'final': True, 'error': True})}\n\n"
 
-    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
 
 class BuildReq(BaseModel):
@@ -170,22 +218,30 @@ class BuildReq(BaseModel):
 def build(request: Request, req: BuildReq, x_client_id: str = Header(default="")):
     rate_limit(_ip(request), limit=5, bucket="build")
     if not os.getenv("GEMINI_API_KEY"):
-        raise HTTPException(503, "GEMINI_API_KEY not set in backend/.env")
+        raise HTTPException(503, "GEMINI_API_KEY is not set")
     site_id = secrets.token_urlsafe(8).lower().replace("_", "x").replace("-", "y")
     base = str(request.base_url).rstrip("/")
+    cid = _cid(x_client_id)
 
     def save(files):
         write_files(SITES / site_id, files)
+        _restored_at.pop(site_id, None)  # this instance wrote it, so it is the freshest copy here
+        if db.configured():
+            # Saved on every round, not only at the end: the preview is requested while the build is still running and may
+            # land on another serverless instance, which can only get the files from the database.
+            try:
+                db.upsert("sites", {"client_id": cid or ANON_CLIENT, "site_id": site_id, "title": _title(files),
+                                    "brief": req.context[:4000], "files": files}, "site_id")
+            except db.DbError:
+                pass
         return {"id": site_id, "url": f"/sites/{site_id}/"}
-
-    cid = _cid(x_client_id)
 
     def persist(e):
         if not cid or not db.configured():
             return False
         try:
-            db.insert("sites", {"client_id": cid, "site_id": site_id, "title": _title(e["files"]), "brief": req.context[:4000],
-                                "files": e["files"], "passed": e["passed"], "issues": e["issues"], "rounds": e["rounds"]})
+            db.upsert("sites", {"client_id": cid, "site_id": site_id, "title": _title(e["files"]), "brief": req.context[:4000],
+                                "files": e["files"], "passed": e["passed"], "issues": e["issues"], "rounds": e["rounds"]}, "site_id")
             return True
         except db.DbError:
             return False
@@ -207,8 +263,7 @@ class DeployReq(BaseModel):
     confirmed: bool = False
 
 
-def _read_site(site_id: str) -> list[dict]:
-    root = SITES / site_id
+def _read_site(root: Path) -> list[dict]:
     files = [{"path": p.relative_to(root).as_posix(), "content": p.read_text(encoding="utf-8")} for p in sorted(root.rglob("*")) if p.is_file()]
     return validate(files)
 
@@ -221,13 +276,14 @@ def deploy(request: Request, req: DeployReq, x_client_id: str = Header(default="
     if req.visibility not in ("private", "public"):
         raise HTTPException(400, "visibility must be private or public")
     cid = _cid(x_client_id)
-    if not SITE_ID_RE.match(req.site_id) or not ((SITES / req.site_id).is_dir() or _restore_site(req.site_id, cid)):
+    root = _ensure_site(req.site_id) if SITE_ID_RE.match(req.site_id) else None
+    if root is None:
         raise HTTPException(404, "Unknown site")
     gh, vc = os.getenv("GITHUB_TOKEN"), os.getenv("VERCEL_TOKEN")
     if not gh or not vc:
-        raise HTTPException(503, "GITHUB_TOKEN and VERCEL_TOKEN must be set in backend/.env")
+        raise HTTPException(503, "GITHUB_TOKEN and VERCEL_TOKEN are not set")
     try:
-        files = _read_site(req.site_id)
+        files = _read_site(root)
     except (InvalidFiles, UnicodeDecodeError) as e:
         raise HTTPException(422, f"Site files rejected: {e}")
 
@@ -287,13 +343,33 @@ def list_deployments(request: Request, x_client_id: str = Header(default="")):
     return {"deployments": rows}
 
 
-class SiteFiles(StaticFiles):
-    async def get_response(self, path, scope):
-        r = await super().get_response(path, scope)
-        r.headers["Content-Security-Policy"] = SITE_CSP
-        r.headers["X-Content-Type-Options"] = "nosniff"
-        return r
+# Generated sites are served by plain routes, not app.mount(): on Vercel a mounted static folder is promoted to the CDN at
+# build time, which would skip the security headers above and the restore-from-database step.
+@app.get("/sites/{site_id}", include_in_schema=False)
+def site_slash(site_id: str):
+    return RedirectResponse(f"/sites/{site_id}/", status_code=307)  # relative links in the site need the trailing slash
 
 
-app.mount("/sites", SiteFiles(directory=SITES, html=True), name="sites")
-app.mount("/", StaticFiles(directory=FRONTEND, html=True), name="frontend")
+@app.get("/sites/{site_id}/{path:path}", include_in_schema=False)
+def site_file(site_id: str, path: str):
+    if not SITE_ID_RE.match(site_id) or any(part.startswith(".") for part in path.split("/")):
+        raise HTTPException(404, "Not found")
+    root = _ensure_site(site_id)
+    if root is None:
+        raise HTTPException(404, "Unknown site")
+    target = (root / (path or "index.html")).resolve()
+    if target.is_dir():
+        target = target / "index.html"
+    if root.resolve() not in target.parents or not target.is_file():
+        raise HTTPException(404, "Not found")
+    return FileResponse(target, headers=SITE_HEADERS)
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(PUBLIC / "index.html")
+
+
+# Locally the app serves the website itself. On Vercel the CDN serves public/, and Vercel's docs say not to mount it.
+if not ON_VERCEL:
+    app.mount("/", StaticFiles(directory=PUBLIC, html=True), name="public")

@@ -66,19 +66,23 @@ def test_missing_tables_gives_actionable_message(monkeypatch):
 def test_build_saves_site_under_client_id(monkeypatch):
     rows = []
     configure(monkeypatch)
-    monkeypatch.setattr(db, "insert", lambda table, row: rows.append((table, row)))
+    monkeypatch.setattr(db, "upsert", lambda table, row, conflict: rows.append((table, row, conflict)))
     fake_build(monkeypatch)
     final = events(c.post("/api/build", json={"context": "a site"}, headers=H))[-1]
     assert final["saved"] is True
-    table, row = rows[0]
-    assert table == "sites" and row["client_id"] == CID and row["title"] == "Ember & Roast" and row["passed"] is True
+    early, last = rows[0], rows[-1]
+    assert early[0] == "sites" and early[2] == "site_id" and "passed" not in early[1]  # saved as soon as the files exist
+    assert last[1]["client_id"] == CID and last[1]["title"] == "Ember & Roast" and last[1]["passed"] is True
 
 
 def test_build_without_client_id_is_not_saved(monkeypatch):
+    rows = []
     configure(monkeypatch)
-    monkeypatch.setattr(db, "insert", lambda *a: (_ for _ in ()).throw(AssertionError("must not save")))
+    monkeypatch.setattr(db, "upsert", lambda table, row, conflict: rows.append(row))
     fake_build(monkeypatch)
     assert events(c.post("/api/build", json={"context": "a"}))[-1]["saved"] is False
+    # the files are still stored so the preview works across instances, but under no one's account and without a result
+    assert rows and all(r["client_id"] == main.ANON_CLIENT and "passed" not in r for r in rows)
 
 
 def test_database_failure_never_breaks_a_build(monkeypatch):
@@ -87,7 +91,7 @@ def test_database_failure_never_breaks_a_build(monkeypatch):
     def boom(*a):
         raise db.DbError("down")
 
-    monkeypatch.setattr(db, "insert", boom)
+    monkeypatch.setattr(db, "upsert", boom)
     fake_build(monkeypatch)
     final = events(c.post("/api/build", json={"context": "a"}, headers=H))[-1]
     assert final["passed"] is True and final["saved"] is False and "error" not in final
