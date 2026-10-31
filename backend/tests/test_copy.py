@@ -14,3 +14,10 @@ def test_the_limit_is_still_disclosed_honestly_in_the_small_print_and_in_cutus_f
     assert "linked to this browser" in HTML and "starts a new empty workspace" in HTML  # one click away, not hidden
     assert "<details" in HTML and "How is this saved?" in HTML
     assert "starts a new empty workspace" in PERSONAS  # Cutu answers truthfully if asked
+
+
+def test_workspace_key_is_offered_and_carries_a_password_warning():
+    js = (ROOT / "public" / "app.js").read_text(encoding="utf-8")
+    assert 'id="open-key"' in HTML and "Use them on another device" in HTML
+    assert "Treat it like a password" in js and "Your workspace key" in js
+    assert "works like a password" in PERSONAS  # Cutu says the same

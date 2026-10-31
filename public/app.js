@@ -367,7 +367,11 @@ const CLIENT_ID = (() => {
 })();
 
 async function api(path) {
-  const r = await fetch(path, { headers: { 'X-Client-Id': CLIENT_ID } });
+  return apiAs(path, CLIENT_ID);
+}
+
+async function apiAs(path, key) {
+  const r = await fetch(path, { headers: { 'X-Client-Id': key } });
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body.detail || `Request failed (${r.status})`);
   return body;
@@ -487,6 +491,73 @@ $('deploy-form').onsubmit = (e) => {
   status.textContent = '';
   showConfirm({ repo_name: repo, visibility: $('deploy-vis').value }, site, (ev) => { status.textContent = `${ev.status}${ev.message ? ': ' + ev.message : ''}`; });
 };
+
+// ---- Workspace key: the browser's anonymous id, shown so it can be carried to another browser or device ----
+const KEY_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const maskKey = (k) => k.replace(/[0-9a-f]/g, '\u2022');
+
+function showKeyDialog() {
+  let revealed = false;
+  const shown = el('span', maskKey(CLIENT_ID));
+  const reveal = el('button', 'Show', {
+    onclick: () => { revealed = !revealed; shown.textContent = revealed ? CLIENT_ID : maskKey(CLIENT_ID); reveal.textContent = revealed ? 'Hide' : 'Show'; },
+  });
+  const copy = el('button', 'Copy', {
+    onclick: async () => {
+      try { await navigator.clipboard.writeText(CLIENT_ID); copy.textContent = 'Copied'; } catch { copy.textContent = 'Copy failed'; }
+      setTimeout(() => (copy.textContent = 'Copy'), 1500);
+    },
+  });
+  const box = el('div', '', { className: 'keybox' });
+  box.append(shown, reveal, copy);
+
+  const input = el('input', '', { id: 'key-input', placeholder: 'Paste a workspace key', autocomplete: 'off', spellcheck: false });
+  const status = el('p', '', { className: 'key-status', role: 'status' });
+  const find = el('button', 'Find my sites');
+  const sw = el('button', 'Switch to these sites', { className: 'primary' });
+  sw.disabled = true;
+  let candidate = '';
+  input.oninput = () => { sw.disabled = true; candidate = ''; status.textContent = ''; };
+
+  find.onclick = async () => {
+    const key = input.value.trim().toLowerCase();
+    if (!KEY_RE.test(key)) return void (status.textContent = 'That does not look like a workspace key. Copy the whole key and try again.');
+    if (key === CLIENT_ID) return void (status.textContent = 'That is the key of this workspace already.');
+    find.disabled = true;
+    status.textContent = 'Looking...';
+    try {
+      const { sites } = await apiAs('/api/sites', key); // only switches to a key that really has sites, so a typo cannot land you in an empty workspace
+      if (!sites.length) {
+        status.textContent = 'No sites were found for that key. Check that you copied all of it.';
+      } else {
+        candidate = key;
+        sw.disabled = false;
+        status.textContent = `Found ${sites.length} site${sites.length === 1 ? '' : 's'}; the latest is "${sites[0].title}". Switching shows them here. Your current workspace stays saved: copy its key above first if you want to come back to it.`;
+      }
+    } catch (e) {
+      status.textContent = e.message;
+    }
+    find.disabled = false;
+  };
+  sw.onclick = () => {
+    try { localStorage.setItem('jm_client', candidate); } catch { return void (status.textContent = 'This browser blocks saving site data, so the key cannot be switched here.'); }
+    location.reload();
+  };
+
+  const findRow = el('div', '', { className: 'row' });
+  findRow.append(find);
+  const row = el('div', '', { className: 'row' });
+  row.append(closeBtn(), sw);
+  showCard(
+    el('h3', 'Your workspace key'),
+    el('p', 'This key is how this browser finds your saved sites. Paste it into another browser or device to open the same sites there.'),
+    box,
+    el('p', 'Treat it like a password: anyone who has it can see, change and deploy your sites. Do not share it or post it online.', { className: 'warn' }),
+    el('h4', 'Open sites from another browser or device'),
+    input, findRow, status, row,
+  );
+}
+$('open-key').onclick = showKeyDialog;
 
 // ---- Make changes: choose who to talk to, then the agents continue down the line with that site ----
 const REVISE_CHOICES = [

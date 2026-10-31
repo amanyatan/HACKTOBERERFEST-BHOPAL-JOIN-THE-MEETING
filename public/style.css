@@ -265,3 +265,22 @@ main { padding-top: calc(92px + 2vh); }
 .fineprint summary { cursor: pointer; width: fit-content; text-decoration: underline; text-underline-offset: 3px; }
 .fineprint summary:focus-visible { outline: 3px solid #1a73e8; outline-offset: 3px; border-radius: 4px; }
 .fineprint p { margin: 8px 0 0; padding: 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, .45); border: 1px solid rgba(255, 255, 255, .7); }
+
+/* ---- Workspace key ---- */
+.linkbtn { background: none; border: 0; padding: 0; font: inherit; color: #0b5bd3; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.linkbtn:focus-visible { outline: 3px solid #1a73e8; outline-offset: 3px; border-radius: 4px; }
+#card h4 { margin: 18px 0 6px; }
+#card .keybox { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: #0b0d14;
+  font: .82rem ui-monospace, Consolas, monospace; word-break: break-all; }
+#card .keybox span { flex: 1 1 14rem; font-size: .76rem; letter-spacing: 0; }
+#card .keybox button { padding: 5px 12px; font-size: .8rem; }
+#card input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .2); background: #0b0d14; color: #eee; font: inherit; }
+#card input:focus-visible { outline: 3px solid #1a73e8; outline-offset: 1px; }
+#card .key-status { min-height: 1.3em; margin: 10px 0 0; color: #b8c0d8; font-size: .9rem; }
+#card button:disabled { opacity: .5; cursor: default; }
+
+/* Dialogs sit outside the meeting room, so they do not inherit its light text; without this their text was dark on dark. */
+#card { color: #eceffa; }
+
+/* With the preview open, it takes all the room the tiles leave (it used to stop short and leave an empty strip on the right). */
+#body:has(#work:not([hidden])) #work { flex: 1 1 0; width: auto; min-width: 0; }
