@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="JM">
+  <defs>
+    <linearGradient id="side" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4a4a"/><stop offset="1" stop-color="#101010"/></linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3c3c3c"/><stop offset=".42" stop-color="#141414"/><stop offset="1" stop-color="#000"/></linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".6"/><stop offset=".3" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <clipPath id="clip"><rect x="20" y="22" width="216" height="200" rx="58"/></clipPath>
+    <path id="jm" d="M66.9 154.6V145H57V119.9H71.3V139.2H96.8V96.9H66.9V81.4H101.2V91.1H111.2V145H101.2V154.6ZM125 154.6V91.1H134.9V81.4H149.2V91.1H159.2V110.4H164.7V91.1H174.8V81.4H189.2V91.1H199V154.6H184.8V96.9H179.2V116H169.1V145H154.8V116H144.8V96.9H139.3V154.6Z"/>
+  </defs>
+  <rect x="20" y="42" width="216" height="200" rx="58" fill="url(#side)"/>
+  <rect x="20" y="22" width="216" height="200" rx="58" fill="url(#face)"/>
+  <g clip-path="url(#clip)"><ellipse cx="128" cy="30" rx="150" ry="74" fill="url(#gloss)"/></g>
+  <rect x="21.5" y="23.5" width="213" height="197" rx="56.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
+  <use href="#jm" x="3.60" y="8" fill="#2c2c2c"/>
+  <use href="#jm" x="3.15" y="7" fill="#3a3a3a"/>
+  <use href="#jm" x="2.70" y="6" fill="#4a4a4a"/>
+  <use href="#jm" x="2.25" y="5" fill="#5c5c5c"/>
+  <use href="#jm" x="1.80" y="4" fill="#707070"/>
+  <use href="#jm" x="1.35" y="3" fill="#868686"/>
+  <use href="#jm" x="0.90" y="2" fill="#9c9c9c"/>
+  <use href="#jm" x="0.45" y="1" fill="#b4b4b4"/>
+  <use href="#jm" fill="#fff"/>
+</svg>
