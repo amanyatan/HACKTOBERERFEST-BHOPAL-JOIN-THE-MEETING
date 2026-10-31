@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join a Meeting</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<section id="landing">
+  <header>
+    <div class="logo"><span class="logo-mark">J</span> Join a Meeting</div>
+    <button id="join" class="btn-join">Join a Meeting</button>
+  </header>
+  <main>
+    <h1>Tell a team your idea.<br>Watch it get built.</h1>
+    <p>Speak to an AI CEO, designer, developer and tester. They plan, build and deploy your website.</p>
+    <p id="error" role="alert" hidden></p>
+  </main>
+</section>
+
+<section id="room" hidden>
+  <div id="body">
+  <div id="grid">
+    <article class="tile" data-agent="ceo" style="--c:#7c8cff">
+      <div class="avatar">C</div><h2>CEO</h2><p class="status">Listening</p>
+    </article>
+    <article class="tile" data-agent="designer" style="--c:#ff7ac6">
+      <div class="avatar">D</div><h2>Designer</h2><p class="status">Waiting</p>
+    </article>
+    <article class="tile" data-agent="developer" style="--c:#3ddc97">
+      <div class="avatar">Dev</div><h2>Developer</h2><p class="status">Waiting</p>
+    </article>
+    <article class="tile" data-agent="tester" style="--c:#ffb454">
+      <div class="avatar">T</div><h2>Tester</h2><p class="status">Waiting</p>
+    </article>
+  </div>
+  <aside id="work" hidden>
+    <nav><button data-tab="preview" class="on">Preview</button><button data-tab="code">Code</button>
+      <button data-tab="tester" id="tab-tester" hidden>Tester's view</button>
+      <a id="open" target="_blank" rel="noopener">Open in new tab</a></nav>
+    <iframe id="preview" sandbox="allow-scripts" title="Generated website"></iframe>
+    <div id="code" hidden><select id="file"></select><pre id="src"></pre></div>
+    <div id="tester-view" hidden><img id="shot" alt="Screenshot the Tester reviewed"></div>
+  </aside>
+  <div id="dialog" hidden><div id="card"></div></div>
+  </div>
+  <p id="captions"></p>
+  <footer><span id="mic">Mic on</span><button id="leave">Leave</button></footer>
+</section>
+<script type="module" src="app.js"></script>
+</body>
+</html>
