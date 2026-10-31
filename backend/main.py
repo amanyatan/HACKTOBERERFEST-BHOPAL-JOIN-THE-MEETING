@@ -128,9 +128,9 @@ def token(request: Request, req: TokenReq = TokenReq()):
     if req.agent not in PERSONAS:
         raise HTTPException(400, "Unknown agent")
     rate_limit(_ip(request), bucket="token")
-    key = os.getenv("GEMINI_API_KEY")
+    key = os.getenv("GEMINI_API_KEY_BOT" if req.agent == "cutu" else "GEMINI_API_KEY")
     if not key:
-        raise HTTPException(503, "GEMINI_API_KEY not set in backend/.env")
+        raise HTTPException(503, "Cutu is not configured" if req.agent == "cutu" else "GEMINI_API_KEY not set in backend/.env")
     from google import genai
 
     client = genai.Client(api_key=key, http_options={"api_version": "v1alpha"})
@@ -139,7 +139,7 @@ def token(request: Request, req: TokenReq = TokenReq()):
         t = client.auth_tokens.create(
             config={
                 "uses": 1,
-                "expire_time": now + timedelta(minutes=10),
+                "expire_time": now + timedelta(minutes=5 if req.agent == "cutu" else 10),
                 "new_session_expire_time": now + timedelta(minutes=1),
                 "live_connect_constraints": {"model": LIVE_MODEL, "config": live_config(req.agent, req.context)},
                 "http_options": {"api_version": "v1alpha"},

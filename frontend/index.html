@@ -49,10 +49,18 @@
         <article class="glass card"><div class="face" style="background-image:url(/mascots/scout-directions.webp)"></div><h3>Developer</h3><p>Writes the site with plain HTML, CSS and JavaScript, and fixes what the Tester finds.</p></article>
         <article class="glass card"><div class="face" style="background-image:url(/mascots/cap-directions.webp)"></div><h3>Tester</h3><p>Opens the finished site in a real browser, reviews a screenshot, then deploys to GitHub and Vercel once you confirm.</p></article>
       </div>
-      <div class="glass card note-card">
-        <h3>Good to know</h3>
-        <p>No account is needed. Your sites and deployments are saved under an anonymous ID kept in this browser, so clearing your browser data means you lose access to them.</p>
-        <p>Nothing is created on GitHub or Vercel until you press the confirm button.</p>
+      <div class="glass card cutu-card">
+        <div class="cutu-mascot">
+          <span class="chip" style="--c:#8b5cf6">Cutu</span>
+          <div class="cutu-avatar" id="cutu-avatar"></div>
+        </div>
+        <div class="cutu-body">
+          <h3>Want to know more about Join the Meeting?</h3>
+          <p>Talk with Cutu, our guide bot. Cutu explains how the platform works, what each agent does, and answers your questions out loud.</p>
+          <button type="button" id="cutu-start" class="btn-join small">Start conversation</button>
+          <p id="cutu-status" class="note" role="status"></p>
+          <div id="cutu-chat" class="cutu-chat" aria-live="polite" hidden></div>
+        </div>
       </div>
     </div>
   </section>
@@ -61,6 +69,7 @@
     <div class="page-inner">
       <h2>Your code</h2>
       <p class="lead">Every site the team builds for you is saved here, with the result of its automated test.</p>
+      <p class="note">Sites are saved under an anonymous ID kept in this browser, so clearing your browser data means losing access to them.</p>
       <div id="code-list" class="stack" aria-live="polite"></div>
     </div>
   </section>

@@ -47,7 +47,7 @@ if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
   setInterval(() => {
     if ($('landing').hidden) return;
     const idle = Date.now() - lastPointer > 2500;
-    for (const m of Object.values(hero)) {
+    for (const m of [...Object.values(hero), cutuMascot]) {
       if (idle && Math.random() < 0.6) m.look(pick(GLANCES));
       if (Math.random() < 0.18) m.react(pick(MOODS), 800);
     }
@@ -239,6 +239,7 @@ function caption(who, text) {
 }
 
 $('join').onclick = async () => {
+  stopCutu();
   $('error').hidden = true;
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
@@ -402,6 +403,87 @@ $('deploy-form').onsubmit = (e) => {
   showConfirm({ repo_name: repo, visibility: $('deploy-vis').value }, site, (ev) => { status.textContent = `${ev.status}${ev.message ? ': ' + ev.message : ''}`; });
 };
 
+// ---- Cutu: the guide bot on the About page. Voice only, with its own Gemini key on the server. ----
+const cutuMascot = mountMascot($('cutu-avatar'), { name: 'cube', label: 'Cutu' });
+let cutuSession = null; // { live, mic } while a conversation is running
+let cutuAttempt = 0; // bumped by every start and every stop, so a slow connection that finished after a cancel can be dropped
+let cutuMood = null;
+let cutuLastWho = '';
+
+function cutuLine(who, text) {
+  const chat = $('cutu-chat');
+  chat.hidden = false;
+  if (who !== cutuLastWho || !chat.lastChild) {
+    const p = el('p', '');
+    p.append(el('b', `${who}: `), el('span', ''));
+    chat.append(p);
+    while (chat.children.length > 8) chat.firstChild.remove();
+    cutuLastWho = who;
+  }
+  chat.lastChild.lastChild.textContent += text;
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function stopCutu(message = '') {
+  cutuAttempt++;
+  clearInterval(cutuMood);
+  const s = cutuSession;
+  cutuSession = null;
+  s?.live.stop();
+  s?.mic.getTracks().forEach((t) => t.stop());
+  const btn = $('cutu-start');
+  btn.textContent = 'Start conversation';
+  btn.classList.remove('end');
+  btn.disabled = false;
+  $('cutu-status').textContent = message;
+}
+
+async function startCutu() {
+  const btn = $('cutu-start');
+  const status = $('cutu-status');
+  const attempt = ++cutuAttempt;
+  btn.disabled = true;
+  status.textContent = 'Asking for your microphone...';
+  let mic;
+  try {
+    mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch {
+    btn.disabled = false;
+    status.textContent = 'Microphone access is needed to talk with Cutu. Allow it in your browser and try again.';
+    return;
+  }
+  if (attempt !== cutuAttempt) { mic.getTracks().forEach((t) => t.stop()); return; } // cancelled while the permission prompt was open
+  status.textContent = 'Connecting...';
+  $('cutu-chat').replaceChildren();
+  cutuLastWho = '';
+  try {
+    const live = await startLive('cutu', mic, {
+      onSpeaking: (on) => {
+        if (attempt !== cutuAttempt) return; // a cancelled attempt must not touch the page
+        status.textContent = on ? 'Cutu is speaking...' : 'Listening. Ask anything about Join the Meeting.';
+        clearInterval(cutuMood);
+        if (on) cutuMood = setInterval(() => cutuMascot.react(pick(['wink', 'sparkle', 'delighted']), 700), 1600);
+      },
+      onUserText: (t) => attempt === cutuAttempt && cutuLine('You', t),
+      onAgentText: (t) => attempt === cutuAttempt && cutuLine('Cutu', t),
+      onToolCall() {},
+      onFarewellDone() {},
+      onClose: () => { if (cutuSession) stopCutu('The conversation ended. Press Start conversation to talk again.'); },
+    }, '', 'A visitor just pressed Start conversation. Greet them in one sentence and offer to explain how Join the Meeting works.');
+    if (attempt !== cutuAttempt) { live.stop(); mic.getTracks().forEach((t) => t.stop()); return; } // cancelled while connecting
+    cutuSession = { live, mic };
+    btn.textContent = 'End conversation';
+    btn.classList.add('end');
+    btn.disabled = false;
+  } catch (e) {
+    mic.getTracks().forEach((t) => t.stop());
+    if (attempt !== cutuAttempt) return;
+    btn.disabled = false;
+    status.textContent = /not configured/i.test(e.message) ? 'Cutu is not available right now.' : 'Could not connect to Cutu. Please try again.';
+  }
+}
+$('cutu-start').onclick = () => (cutuSession ? stopCutu('Conversation ended.') : startCutu());
+
 // ---- Router: #/ (home), #/about, #/code, #/deploy ----
 const ROUTES = ['home', 'about', 'code', 'deploy'];
 function route() {
@@ -412,6 +494,7 @@ function route() {
     a.classList.toggle('active', a.dataset.route === name);
     if (a.dataset.route === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
+  if (name !== 'about') stopCutu();
   window.scrollTo(0, 0);
   if (name === 'code') loadCode();
   if (name === 'deploy') loadDeploy();
