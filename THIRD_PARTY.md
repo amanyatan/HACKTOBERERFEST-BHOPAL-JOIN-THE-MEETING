@@ -6,7 +6,6 @@ New code in this repo is ours. Libraries, fonts and artwork are credited here.
 |------|----------|---------|
 | [page-mascot](https://github.com/nilbuild/page-mascot) 0.1.0 by Kamran Ahmed | Agent characters: sprite sheets `kamran`, `ballerina`, `scout`, `cap` in `frontend/mascots/`, and the pointer-follow/boop behaviour (ported to vanilla JS in `frontend/mascot.js`) | MIT (copy in `frontend/mascots/LICENSE-page-mascot.txt`) |
 | Gradient wave background (`frontend/gradient-wave.js`) | Landing page background. Ported to vanilla JS from a React component you supplied; its original author and license were not stated in the paste, so check them before publishing | Unknown |
-| Image-stream corridor (`frontend/image-stream.js`) | Landing page card corridor. Ported to vanilla JS from a React component you supplied; its original author and license were not stated in the paste, so check them before publishing. The demo's CDN images were not used: the cards show mascot faces cropped from the sheets above | Unknown |
 | [Manrope](https://fonts.google.com/specimen/Manrope) | Site font, loaded from Google Fonts | SIL OFL 1.1 |
 | [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans) | The "JM" letters in `frontend/logo.svg` (converted to outlines) | SIL OFL 1.1 |
 | [FastAPI](https://github.com/fastapi/fastapi), [uvicorn](https://github.com/encode/uvicorn), [httpx](https://github.com/encode/httpx), [python-dotenv](https://github.com/theskumar/python-dotenv) | Backend | MIT / BSD-3 |

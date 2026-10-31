@@ -1,7 +1,6 @@
 import { startLive } from './live.js';
 import { mountMascot } from './mascot.js';
 import { mountGradientWave } from './gradient-wave.js';
-import { mountImageStream } from './image-stream.js';
 
 const $ = (id) => document.getElementById(id);
 const wave = mountGradientWave($('wave')); // landing background; paused while in the room
@@ -33,17 +32,6 @@ const mascots = Object.fromEntries(Object.entries(CHARACTER).map(([agent, name])
   agent,
   mountMascot(document.querySelector(`.tile[data-agent="${agent}"] .avatar`), { name, label: LABEL[agent] }),
 ]));
-
-// Landing background: a corridor of mascot cards (12 faces = 4 characters x 3 expressions cropped from the sheets).
-const TINT = { ceo: '#7c8cff', designer: '#ff7ac6', developer: '#3ddc97', tester: '#ffb454' };
-const FACES = [['directions', 4], ['reactions', 1], ['reactions', 2]]; // centre look, heart, sparkle
-mountImageStream($('stream'), {
-  axis: 74, // keep the corridor below the headline and subtitle
-  items: FACES.flatMap(([kind, cell]) => Object.entries(CHARACTER).map(([agent, name]) => ({
-    background: `linear-gradient(160deg, color-mix(in srgb, ${TINT[agent]} 30%, #fff), color-mix(in srgb, ${TINT[agent]} 65%, #fff))`,
-    face: { sheet: `/mascots/${name}-${kind}.webp`, cell },
-  }))),
-});
 
 let context = '';
 let handoff = null;

@@ -60,6 +60,3 @@ footer { display: flex; justify-content: center; align-items: center; gap: 20px;
 #wave { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
 #landing header, #landing main { position: relative; z-index: 1; }
 main p { color: #2b3a4a; }
-#stream { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
-#landing header, #landing main { z-index: 2; }
-.ish-card { box-shadow: 0 1.2cqw 3cqw rgba(15, 60, 110, .25); outline: .15cqw solid rgba(255, 255, 255, .75); outline-offset: -.15cqw; }
