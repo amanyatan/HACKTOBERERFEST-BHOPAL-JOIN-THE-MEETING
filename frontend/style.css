@@ -78,7 +78,7 @@ main .sub { font-size: clamp(1.1rem, 2.4vw, 1.5rem); font-weight: 600; max-width
 
 /* Hero mascots: a row above the headline; pinned to the bottom of the screen on phones. */
 main { padding-top: 3vh; }
-.hero-mascots { display: flex; justify-content: center; align-items: flex-end; gap: 0; margin-bottom: -14px; }
+.hero-mascots { display: flex; justify-content: center; align-items: flex-end; gap: 0; margin-bottom: -40px; }
 .hero-mascot { animation: hero-rise .7s ease-out both; animation-delay: calc(var(--i) * 140ms); }
 .hero-bob { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .hero-avatar { position: relative; width: 112px; height: 112px; } /* the character alone: no circle, no background */
