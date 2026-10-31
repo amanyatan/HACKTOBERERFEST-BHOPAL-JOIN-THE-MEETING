@@ -15,11 +15,19 @@
 <body>
 <section id="landing">
   <div id="wave" aria-hidden="true"></div>
-  <header>
-    <div class="logo"><img class="logo-mark" src="logo.svg" alt="JM logo"> Join a Meeting</div>
-    <button id="join" class="btn-join">Join a Meeting</button>
+
+  <header class="nav glass">
+    <a class="logo" href="#/" aria-label="Join a Meeting, home"><img class="logo-mark" src="logo.svg" alt="JM logo"><span class="logo-text">Join a Meeting</span></a>
+    <nav class="links" aria-label="Main">
+      <a href="#/" data-route="home">Home</a>
+      <a href="#/about" data-route="about">About</a>
+      <a href="#/code" data-route="code"><span class="d-only">Your </span>Code</a>
+      <a href="#/deploy" data-route="deploy">Deploy</a>
+    </nav>
+    <button id="join" class="btn-join"><span class="d-only">Join a Meeting</span><span class="m-only">Join</span></button>
   </header>
-  <main>
+
+  <main class="view" id="view-home">
     <div class="hero-mascots" role="group" aria-label="Your AI team">
       <div class="hero-mascot" data-agent="ceo" style="--c:#7c8cff;--i:0"><div class="hero-bob"><span class="chip">CEO</span><div class="hero-avatar"></div></div></div>
       <div class="hero-mascot" data-agent="designer" style="--c:#ff7ac6;--i:1"><div class="hero-bob"><span class="chip">Designer</span><div class="hero-avatar"></div></div></div>
@@ -30,6 +38,48 @@
     <p class="sub">Join the Meeting and our agents <span class="shine">make it happen</span></p>
     <p id="error" role="alert" hidden></p>
   </main>
+
+  <section class="view page" id="view-about" hidden>
+    <div class="page-inner">
+      <h2>Meet the team</h2>
+      <p class="lead">Join a Meeting is a voice-first website builder. You talk to four AI agents. They plan, design, build, test and publish a plain HTML, CSS and JavaScript site, one after the other.</p>
+      <div class="team">
+        <article class="glass card"><div class="face" style="background-image:url(/mascots/kamran-directions.webp)"></div><h3>CEO</h3><p>Listens, asks what you are building and why, then reads the requirements back until you say yes.</p></article>
+        <article class="glass card"><div class="face" style="background-image:url(/mascots/ballerina-directions.webp)"></div><h3>Designer</h3><p>Chooses layout, colours and fonts with you and hands the Developer a short design brief.</p></article>
+        <article class="glass card"><div class="face" style="background-image:url(/mascots/scout-directions.webp)"></div><h3>Developer</h3><p>Writes the site with plain HTML, CSS and JavaScript, and fixes what the Tester finds.</p></article>
+        <article class="glass card"><div class="face" style="background-image:url(/mascots/cap-directions.webp)"></div><h3>Tester</h3><p>Opens the finished site in a real browser, reviews a screenshot, then deploys to GitHub and Vercel once you confirm.</p></article>
+      </div>
+      <div class="glass card note-card">
+        <h3>Good to know</h3>
+        <p>No account is needed. Your sites and deployments are saved under an anonymous ID kept in this browser, so clearing your browser data means you lose access to them.</p>
+        <p>Nothing is created on GitHub or Vercel until you press the confirm button.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="view page" id="view-code" hidden>
+    <div class="page-inner">
+      <h2>Your code</h2>
+      <p class="lead">Every site the team builds for you is saved here, with the result of its automated test.</p>
+      <div id="code-list" class="stack" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="view page" id="view-deploy" hidden>
+    <div class="page-inner">
+      <h2>Deploy</h2>
+      <p class="lead">Publish a saved site to a new GitHub repository and Vercel. You will be asked to confirm before anything is created.</p>
+      <form id="deploy-form" class="glass card form" autocomplete="off">
+        <label>Saved site<select id="deploy-site" required></select></label>
+        <label>Repository name<input id="deploy-repo" required maxlength="60" placeholder="my-new-site"></label>
+        <label>Visibility<select id="deploy-vis"><option value="private">Private</option><option value="public">Public</option></select></label>
+        <button type="submit" class="btn-join">Review and deploy</button>
+        <p id="deploy-status" class="note" role="status"></p>
+      </form>
+      <h3 class="section-title">Your deployments</h3>
+      <div id="deploy-list" class="stack" aria-live="polite"></div>
+    </div>
+  </section>
 </section>
 
 <section id="room" hidden>
@@ -56,11 +106,12 @@
     <div id="code" hidden><select id="file"></select><pre id="src"></pre></div>
     <div id="tester-view" hidden><img id="shot" alt="Screenshot the Tester reviewed"></div>
   </aside>
-  <div id="dialog" hidden><div id="card"></div></div>
   </div>
   <p id="captions"></p>
   <footer><span id="mic">Mic on</span><button id="leave">Leave</button></footer>
 </section>
+
+<div id="dialog" hidden><div id="card"></div></div>
 <script type="module" src="app.js"></script>
 </body>
 </html>

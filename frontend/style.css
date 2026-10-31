@@ -57,7 +57,7 @@ footer { display: flex; justify-content: center; align-items: center; gap: 20px;
 .mascot .squash { position: relative; display: block; width: 100%; height: 100%; transform-origin: 50% 78%; }
 .mascot .layer { position: absolute; inset: 0; background-size: 300% 300%; background-repeat: no-repeat; }
 #landing { position: relative; min-height: 100vh; overflow: hidden; }
-#wave { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+#wave { position: fixed; inset: 0; z-index: 0; overflow: hidden; } /* viewport-sized, so tall pages scroll over it */
 #landing header, #landing main { position: relative; z-index: 1; }
 main p { color: #2b3a4a; }
 main .sub { font-size: clamp(1.1rem, 2.4vw, 1.5rem); font-weight: 600; max-width: 720px; color: #1b2b3c; }
@@ -77,7 +77,7 @@ main .sub { font-size: clamp(1.1rem, 2.4vw, 1.5rem); font-weight: 600; max-width
 @media (prefers-reduced-motion: reduce) { .shine { animation: none; } }
 
 /* Hero mascots: a row above the headline; pinned to the bottom of the screen on phones. */
-main { padding-top: 3vh; }
+main { padding-top: calc(92px + 2vh); }
 .hero-mascots { display: flex; justify-content: center; align-items: flex-end; gap: 0; margin-bottom: -40px; }
 .hero-mascot { animation: hero-rise .7s ease-out both; animation-delay: calc(var(--i) * 140ms); }
 .hero-bob { display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -89,8 +89,69 @@ main { padding-top: 3vh; }
 @keyframes chip-pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .hero-mascot, .chip { animation: none; } }
 @media (max-width: 600px) {
-  main { padding-top: 12vh; }
+  main { padding-top: calc(92px + 6vh); }
   .hero-mascots { position: fixed; left: 0; right: 0; bottom: max(18px, env(safe-area-inset-bottom)); gap: 10px; margin: 0; z-index: 2; }
   .hero-avatar { width: 84px; height: 84px; }
   .chip { font-size: .68rem; padding: 2px 9px; }
 }
+
+/* ---- Glass navbar and pages ---- */
+.glass { background: rgba(255, 255, 255, .22); backdrop-filter: blur(18px) saturate(170%); -webkit-backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, .55); box-shadow: 0 8px 32px rgba(15, 60, 110, .18), inset 0 1px 0 rgba(255, 255, 255, .6); }
+#landing .nav { position: fixed; z-index: 20; top: 14px; left: 50%; transform: translateX(-50%); width: min(980px, calc(100% - 24px));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 8px 14px; border-radius: 999px; }
+.logo { text-decoration: none; color: #0f2438; }
+.nav .logo-mark { width: 40px; height: 40px; }
+.links { display: flex; gap: 4px; }
+.links a { padding: 9px 16px; border-radius: 999px; color: #16324f; font-weight: 700; font-size: .95rem; text-decoration: none; transition: background .2s; }
+.links a:hover { background: rgba(255, 255, 255, .45); }
+.links a.active { background: rgba(255, 255, 255, .78); box-shadow: 0 2px 8px rgba(15, 60, 110, .15); }
+.links a:focus-visible, .btn-join:focus-visible, .btn-ghost:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
+.m-only { display: none; }
+
+.view { position: relative; z-index: 1; }
+.page { padding: calc(100px + 3vh) 16px 80px; }
+.page-inner { max-width: 980px; margin: 0 auto; text-align: left; }
+.page h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 0 0 10px; color: #0f2438; }
+.page h3 { margin: 0 0 6px; color: #0f2438; }
+.lead { color: #1b2b3c; font-size: 1.08rem; max-width: 680px; margin: 0 0 24px; }
+.card { padding: 20px; border-radius: 22px; }
+.card p { margin: 0 0 8px; color: #1b2b3c; }
+.team { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+.face { width: 96px; height: 96px; margin-bottom: 4px; background-size: 300% 300%; background-position: 50% 50%; background-repeat: no-repeat; }
+.note-card { margin-top: 16px; }
+.stack { display: grid; gap: 14px; }
+.section-title { margin: 30px 0 12px !important; }
+.item { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.item h3 { margin: 0 0 4px; }
+.meta { color: #35506b; font-size: .9rem; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-ghost { background: rgba(255, 255, 255, .55); border: 1px solid rgba(255, 255, 255, .85); color: #12324f; padding: 8px 16px; border-radius: 999px; font-weight: 700; cursor: pointer; text-decoration: none; font-size: .9rem; }
+.btn-ghost:hover { background: rgba(255, 255, 255, .85); }
+.badge { padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 800; }
+.badge.ok { background: #d9f7e5; color: #116a3a; }
+.badge.bad { background: #fde4e1; color: #a1281b; }
+.badge.unk { background: #e7ebf1; color: #415163; }
+.note { color: #35506b; font-size: .92rem; margin: 0; min-height: 1.2em; }
+.form { display: grid; gap: 14px; max-width: 520px; }
+.form label { display: grid; gap: 6px; font-weight: 700; color: #12324f; font-size: .9rem; }
+.form input, .form select { padding: 11px 14px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, .85); background: rgba(255, 255, 255, .6); font: inherit; font-weight: 500; color: #0f2438; }
+.form input:focus-visible, .form select:focus-visible { outline: 3px solid #1a73e8; outline-offset: 1px; }
+.form .btn-join { justify-self: start; }
+
+#dialog { z-index: 50; }
+#card.wide { max-width: 860px; }
+#card pre { max-height: 52vh; overflow: auto; margin: 10px 0; padding: 12px; border-radius: 10px; background: #0b0d14; color: #cfd3e6; font-size: .78rem; white-space: pre; }
+#card select { background: #0b0d14; color: #eee; border: 1px solid rgba(255, 255, 255, .2); border-radius: 8px; padding: 6px 10px; }
+
+@media (max-width: 600px) {
+  #landing .nav { top: 8px; width: calc(100% - 16px); padding: 6px 6px 6px 8px; gap: 4px; }
+  .nav .logo-mark { width: 36px; height: 36px; }
+  .logo-text, .d-only { display: none; }
+  .m-only { display: inline; }
+  .links { gap: 0; }
+  .links a { padding: 8px 9px; font-size: .84rem; }
+  .nav .btn-join { padding: 9px 16px; }
+  .page { padding-top: 84px; }
+}
+@media (prefers-reduced-motion: reduce) { .links a { transition: none; } }
