@@ -484,6 +484,49 @@ async function startCutu() {
 }
 $('cutu-start').onclick = () => (cutuSession ? stopCutu('Conversation ended.') : startCutu());
 
+// ---- Fluid nav indicator: a glass pill that stretches, squashes and settles as it glides between links ----
+const navLinks = document.querySelector('.links');
+const blob = el('span', '', { className: 'blob' });
+blob.setAttribute('aria-hidden', 'true');
+navLinks.prepend(blob);
+navLinks.classList.add('fluid');
+let blobAt = null;     // where the pill currently is: { x, w }
+let blobTarget = null; // the link it is heading for
+
+const activeLink = () => navLinks.querySelector('a.active');
+
+function moveBlob(link, animate = true) {
+  blobTarget = link;
+  if (!link) { blob.style.opacity = '0'; blobAt = null; return; }
+  const box = navLinks.getBoundingClientRect();
+  const r = link.getBoundingClientRect();
+  const to = { x: r.left - box.left, w: r.width };
+  const cur = blob.getBoundingClientRect();
+  const from = blobAt && { x: cur.left - box.left, w: cur.width }; // where the pill visibly is, even mid-flight
+  blob.style.opacity = '1';
+  blob.style.transform = `translateX(${to.x}px)`;
+  blob.style.width = `${to.w}px`;
+  blobAt = to;
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!from || !animate || still || (from.x === to.x && from.w === to.w)) return;
+  // Stretch toward the destination mid-flight and flatten slightly, then spring into place.
+  const d = to.x - from.x;
+  const stretch = Math.min(0.7, Math.abs(d) / 260);
+  blob.animate([
+    { transform: `translateX(${from.x}px) scale(1, 1)`, width: `${from.w}px` },
+    { transform: `translateX(${from.x + d * 0.5}px) scale(1, ${1 - stretch * 0.25})`, width: `${Math.max(from.w, to.w) + Math.abs(d) * 0.45}px`, offset: 0.45 },
+    { transform: `translateX(${to.x}px) scale(1, 1)`, width: `${to.w}px` },
+  ], { duration: 560, easing: 'cubic-bezier(.34, 1.36, .5, 1)' });
+}
+
+navLinks.querySelectorAll('a').forEach((a) => {
+  a.addEventListener('mouseenter', () => moveBlob(a));
+  a.addEventListener('focus', () => moveBlob(a));
+});
+navLinks.addEventListener('mouseleave', () => moveBlob(activeLink()));
+navLinks.addEventListener('focusout', (e) => { if (!navLinks.contains(e.relatedTarget)) moveBlob(activeLink()); });
+new ResizeObserver(() => moveBlob(blobTarget, false)).observe(navLinks); // font load, rotation, window resize
+
 // ---- Router: #/ (home), #/about, #/code, #/deploy ----
 const ROUTES = ['home', 'about', 'code', 'deploy'];
 function route() {
@@ -495,6 +538,7 @@ function route() {
     if (a.dataset.route === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
   if (name !== 'about') stopCutu();
+  moveBlob(activeLink());
   window.scrollTo(0, 0);
   if (name === 'code') loadCode();
   if (name === 'deploy') loadDeploy();
