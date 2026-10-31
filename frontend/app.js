@@ -1,7 +1,10 @@
 import { startLive } from './live.js';
 import { mountMascot } from './mascot.js';
+import { mountGradientWave } from './gradient-wave.js';
 
 const $ = (id) => document.getElementById(id);
+const wave = mountGradientWave($('wave')); // landing background; paused while in the room
+wave.start();
 let micStream = null;
 let live = null;
 let speaking = false;
@@ -219,6 +222,7 @@ $('join').onclick = async () => {
     return;
   }
   $('landing').hidden = true;
+  wave.stop();
   $('room').hidden = false;
   context = '';
   building = null;
@@ -237,5 +241,6 @@ $('leave').onclick = () => {
   document.querySelectorAll('.tile').forEach((t) => t.classList.remove('speaking'));
   $('room').hidden = true;
   $('landing').hidden = false;
+  wave.start();
 };
 window.sendText = (t) => live?.sendText(t); // typed fallback / testing
