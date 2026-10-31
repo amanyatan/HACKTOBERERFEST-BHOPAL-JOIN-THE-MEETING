@@ -259,3 +259,9 @@ main { padding-top: calc(92px + 2vh); }
 @media (prefers-reduced-motion: reduce) {
   .form select::picker(select), #card select::picker(select), #file::picker(select) { transition: none; }
 }
+
+/* ---- Small print: present, but not the first thing a visitor reads ---- */
+.fineprint { margin: 0 0 20px; color: #35506b; font-size: .88rem; max-width: 680px; }
+.fineprint summary { cursor: pointer; width: fit-content; text-decoration: underline; text-underline-offset: 3px; }
+.fineprint summary:focus-visible { outline: 3px solid #1a73e8; outline-offset: 3px; border-radius: 4px; }
+.fineprint p { margin: 8px 0 0; padding: 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, .45); border: 1px solid rgba(255, 255, 255, .7); }
