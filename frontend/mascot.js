@@ -51,8 +51,8 @@ export function mountMascot(host, { name, label = 'mascot' }) {
   let reaction = null;
   show(direction, reaction);
 
+  let sector = -1;
   if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-    let sector = -1;
     let pointer = null;
     const aim = () => {
       if (!pointer) return;
@@ -109,5 +109,8 @@ export function mountMascot(host, { name, label = 'mascot' }) {
     squash.animate(SQUASH, { duration: SQUASH_MS, easing: 'linear' });
   };
 
-  return { react };
+  // Point the head somewhere without a pointer (idle glances). Forgets the pointer's sector so tracking resumes cleanly.
+  const look = (d) => { sector = -1; direction = d; show(direction, reaction); };
+
+  return { react, look };
 }

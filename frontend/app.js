@@ -33,6 +33,27 @@ const mascots = Object.fromEntries(Object.entries(CHARACTER).map(([agent, name])
   mountMascot(document.querySelector(`.tile[data-agent="${agent}"] .avatar`), { name, label: LABEL[agent] }),
 ]));
 
+// Landing hero: the same four characters. They look around and react on their own, and the pointer takes over while it moves.
+const hero = Object.fromEntries(Object.entries(CHARACTER).map(([agent, name]) => [
+  agent,
+  mountMascot(document.querySelector(`.hero-mascot[data-agent="${agent}"] .hero-avatar`), { name, label: LABEL[agent] }),
+]));
+let lastPointer = 0;
+window.addEventListener('pointermove', () => (lastPointer = Date.now()), { passive: true });
+const GLANCES = ['up-left', 'up', 'up-right', 'left', 'right', 'down-left', 'down', 'down-right', 'center'];
+const MOODS = ['sparkle', 'heart', 'wink', 'delighted', 'blink', 'surprised'];
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  setInterval(() => {
+    if ($('landing').hidden) return;
+    const idle = Date.now() - lastPointer > 2500;
+    for (const m of Object.values(hero)) {
+      if (idle && Math.random() < 0.6) m.look(pick(GLANCES));
+      if (Math.random() < 0.18) m.react(pick(MOODS), 800);
+    }
+  }, 1400);
+}
+
 let context = '';
 let handoff = null;
 let building = null;

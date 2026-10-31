@@ -75,3 +75,24 @@ main .sub { font-size: clamp(1.1rem, 2.4vw, 1.5rem); font-weight: 600; max-width
 }
 @keyframes shine { to { background-position: 200% 0; } }
 @media (prefers-reduced-motion: reduce) { .shine { animation: none; } }
+
+/* Hero mascots: a row above the headline; pinned to the bottom of the screen on phones. */
+main { padding-top: 9vh; }
+.hero-mascots { display: flex; justify-content: center; align-items: flex-end; gap: 28px; margin-bottom: 26px; }
+.hero-mascot { animation: hero-rise .75s cubic-bezier(.2, .9, .3, 1.35) both; animation-delay: calc(var(--i) * 140ms); }
+.hero-bob { display: flex; flex-direction: column; align-items: center; gap: 8px; animation: hero-bob 3.6s ease-in-out infinite; animation-delay: calc(var(--i) * -0.9s); }
+.hero-avatar { position: relative; width: 104px; height: 104px; border-radius: 50%; overflow: hidden;
+  background: color-mix(in srgb, var(--c) 50%, #fff); border: 3px solid #fff; box-shadow: 0 10px 24px rgba(15, 60, 110, .28); }
+.chip { padding: 3px 12px; border-radius: 999px; background: #fff; border: 2px solid var(--c); font-size: .8rem; font-weight: 800; letter-spacing: .02em;
+  color: color-mix(in srgb, var(--c) 50%, #000); box-shadow: 0 4px 12px rgba(15, 60, 110, .18);
+  animation: chip-pop .5s cubic-bezier(.2, .9, .3, 1.5) both; animation-delay: calc(var(--i) * 140ms + 450ms); }
+@keyframes hero-rise { from { opacity: 0; transform: translateY(36px) scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes hero-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+@keyframes chip-pop { from { opacity: 0; transform: translateY(8px) scale(.6); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hero-mascot, .hero-bob, .chip { animation: none; } }
+@media (max-width: 600px) {
+  main { padding-top: 18vh; }
+  .hero-mascots { position: fixed; left: 0; right: 0; bottom: max(18px, env(safe-area-inset-bottom)); gap: 10px; margin: 0; z-index: 2; }
+  .hero-avatar { width: 70px; height: 70px; border-width: 2px; }
+  .chip { font-size: .68rem; padding: 2px 9px; }
+}
