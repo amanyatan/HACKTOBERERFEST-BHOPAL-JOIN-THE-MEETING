@@ -31,3 +31,6 @@ create index if not exists deployments_client_idx on public.deployments (client_
 -- Only the backend, using the service role key, can touch these tables.
 alter table public.sites enable row level security;
 alter table public.deployments enable row level security;
+
+-- Make Supabase's API notice the new tables straight away (otherwise it can answer "table not found" for a minute).
+notify pgrst, 'reload schema';
