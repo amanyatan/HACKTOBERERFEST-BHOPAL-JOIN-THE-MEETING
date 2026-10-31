@@ -60,3 +60,18 @@ footer { display: flex; justify-content: center; align-items: center; gap: 20px;
 #wave { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
 #landing header, #landing main { position: relative; z-index: 1; }
 main p { color: #2b3a4a; }
+main .sub { font-size: clamp(1.1rem, 2.4vw, 1.5rem); font-weight: 600; max-width: 720px; color: #1b2b3c; }
+/* Animated gradient text. Colours start and end the same and the image shifts by exactly one tile (200%), so the loop is seamless. */
+.shine {
+  font-weight: 800;
+  white-space: nowrap;
+  background: linear-gradient(90deg, #1d4ed8, #7c3aed, #db2777, #ea580c, #1d4ed8);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: shine 4s linear infinite;
+}
+@keyframes shine { to { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .shine { animation: none; } }
