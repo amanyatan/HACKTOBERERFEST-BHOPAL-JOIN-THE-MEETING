@@ -203,7 +203,7 @@ SECRET_VALUES = {"GEMINI_API_KEY": "gem-SECRET-1", "SUPABASE_URL": "https://x.su
 
 @pytest.fixture
 def env_file(tmp_path, monkeypatch):
-    for name in push_env.NAMES + ["SUPABASE_ANON_KEY"]:
+    for name in push_env.NAMES + ["SUPABASE_ANON_KEY", "VERCEL_TOKEN"]:  # the real .env was loaded into os.environ when main was imported
         monkeypatch.delenv(name, raising=False)
     f = tmp_path / ".env"
     f.write_text("\n".join(f"{k}={v}" for k, v in SECRET_VALUES.items()) + "\nGITHUB_TOKEN=\n")
@@ -233,7 +233,9 @@ def test_env_script_apply_posts_each_variable_with_the_right_type_and_never_the_
     code = push_env.main(["--project", "demo", "--team", "team_1", "--target", "production", "--apply", "--yes"], client=client, env_file=env_file)
     assert code == 0
     by_key = {b["key"]: b for _, _, b in sent}
-    assert set(by_key) == {"GEMINI_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "VERCEL_TOKEN", "LIVE_MODEL"}  # empty GITHUB_TOKEN skipped
+    assert set(by_key) == {"GEMINI_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "DEPLOY_VERCEL_TOKEN", "LIVE_MODEL"}  # empty GITHUB_TOKEN skipped
+    assert "VERCEL_TOKEN" not in by_key  # Vercel would refuse that name
+    assert by_key["DEPLOY_VERCEL_TOKEN"]["value"] == "vcl-SECRET-3" and by_key["DEPLOY_VERCEL_TOKEN"]["type"] == "sensitive"  # old local name, new remote name
     assert by_key["GEMINI_API_KEY"]["type"] == "sensitive" and by_key["SUPABASE_URL"]["type"] == "plain"
     assert all(b["target"] == ["production"] for b in by_key.values())
     url, auth, _ = sent[0]
@@ -242,7 +244,7 @@ def test_env_script_apply_posts_each_variable_with_the_right_type_and_never_the_
 
 
 def test_env_script_refuses_without_required_settings_and_without_a_token(tmp_path, monkeypatch, capsys):
-    for name in push_env.NAMES:
+    for name in push_env.NAMES + ["VERCEL_TOKEN"]:
         monkeypatch.delenv(name, raising=False)
     empty = tmp_path / ".env"
     empty.write_text("LIVE_MODEL=x\n")
@@ -251,7 +253,7 @@ def test_env_script_refuses_without_required_settings_and_without_a_token(tmp_pa
     no_token = tmp_path / "no_token.env"
     no_token.write_text("GEMINI_API_KEY=a\nSUPABASE_URL=https://x\nSUPABASE_SERVICE_KEY=b\n")
     assert push_env.main(["--project", "demo", "--apply", "--yes"], env_file=no_token) == 2
-    assert "VERCEL_TOKEN is needed" in capsys.readouterr().out
+    assert "DEPLOY_VERCEL_TOKEN (or the older VERCEL_TOKEN) is needed" in capsys.readouterr().out
 
 
 def test_env_script_reports_api_failures_without_the_value(env_file, capsys):
@@ -259,3 +261,42 @@ def test_env_script_reports_api_failures_without_the_value(env_file, capsys):
     assert push_env.main(["--project", "demo", "--apply", "--yes"], client=client, env_file=env_file) == 1
     out = capsys.readouterr().out
     assert "HTTP 403 Forbidden" in out and "gem-SECRET-1" not in out
+
+
+def test_env_script_prefers_the_new_token_name_over_the_old_one(tmp_path, monkeypatch):
+    for name in push_env.NAMES + ["VERCEL_TOKEN"]:
+        monkeypatch.delenv(name, raising=False)
+    f = tmp_path / ".env"
+    f.write_text("VERCEL_TOKEN=old-one\nDEPLOY_VERCEL_TOKEN=new-one\n")
+    assert push_env.collect(f) == {"DEPLOY_VERCEL_TOKEN": "new-one"}
+
+
+def test_deploy_token_works_under_the_allowed_name_and_the_old_one_still_works_locally(monkeypatch):
+    monkeypatch.delenv("DEPLOY_VERCEL_TOKEN", raising=False)
+    monkeypatch.delenv("VERCEL_TOKEN", raising=False)
+    assert main._vercel_token() == ""
+    monkeypatch.setenv("VERCEL_TOKEN", "old")
+    assert main._vercel_token() == "old"
+    monkeypatch.setenv("DEPLOY_VERCEL_TOKEN", "new")
+    assert main._vercel_token() == "new"  # the allowed name wins
+
+
+def test_health_counts_deploy_as_configured_with_only_the_new_name(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "g")
+    monkeypatch.delenv("VERCEL_TOKEN", raising=False)
+    monkeypatch.setenv("DEPLOY_VERCEL_TOKEN", "v")
+    assert c.get("/api/health").json()["deploy_configured"] is True
+    monkeypatch.delenv("DEPLOY_VERCEL_TOKEN")
+    assert c.get("/api/health").json()["deploy_configured"] is False
+
+
+def test_deploy_endpoint_names_the_variable_that_is_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "SITES", tmp_path)
+    (tmp_path / "abc12345").mkdir()
+    (tmp_path / "abc12345" / "index.html").write_text("<h1>x</h1>")
+    monkeypatch.setenv("GITHUB_TOKEN", "g")
+    monkeypatch.delenv("DEPLOY_VERCEL_TOKEN", raising=False)
+    monkeypatch.delenv("VERCEL_TOKEN", raising=False)
+    main._hits.clear()
+    r = c.post("/api/deploy", json={"site_id": "abc12345", "repo_name": "r", "visibility": "private", "confirmed": True})
+    assert r.status_code == 503 and "DEPLOY_VERCEL_TOKEN" in r.json()["detail"]

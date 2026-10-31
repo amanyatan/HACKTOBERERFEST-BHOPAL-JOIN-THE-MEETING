@@ -37,6 +37,12 @@ LIVE_MODEL = os.getenv("LIVE_MODEL", "gemini-3.8-live")
 PUBLIC = ROOT / "public"  # the website itself; Vercel serves this folder from its CDN
 
 
+def _vercel_token() -> str:
+    """Vercel reserves names starting with VERCEL_, so its dashboard will not let you set VERCEL_TOKEN (the Value box says
+    'Populated by System'). The variable to set there is DEPLOY_VERCEL_TOKEN; the old name still works in a local .env."""
+    return os.getenv("DEPLOY_VERCEL_TOKEN") or os.getenv("VERCEL_TOKEN") or ""
+
+
 def _sites_dir() -> Path:
     """Generated sites live here. Serverless filesystems are read-only apart from the temp directory."""
     tmp = Path(tempfile.gettempdir()) / "generated"
@@ -159,7 +165,7 @@ def health():
         "key_configured": bool(os.getenv("GEMINI_API_KEY")),
         "cutu_configured": bool(os.getenv("GEMINI_API_KEY_BOT")),
         "database": db.configured(),
-        "deploy_configured": bool(os.getenv("GITHUB_TOKEN") and os.getenv("VERCEL_TOKEN")),
+        "deploy_configured": bool(os.getenv("GITHUB_TOKEN") and _vercel_token()),
         "browser_tests": browser_available(),
         "vercel": ON_VERCEL,
     }
@@ -279,9 +285,9 @@ def deploy(request: Request, req: DeployReq, x_client_id: str = Header(default="
     root = _ensure_site(req.site_id) if SITE_ID_RE.match(req.site_id) else None
     if root is None:
         raise HTTPException(404, "Unknown site")
-    gh, vc = os.getenv("GITHUB_TOKEN"), os.getenv("VERCEL_TOKEN")
+    gh, vc = os.getenv("GITHUB_TOKEN"), _vercel_token()
     if not gh or not vc:
-        raise HTTPException(503, "GITHUB_TOKEN and VERCEL_TOKEN are not set")
+        raise HTTPException(503, "GITHUB_TOKEN and DEPLOY_VERCEL_TOKEN are not set")
     try:
         files = _read_site(root)
     except (InvalidFiles, UnicodeDecodeError) as e:

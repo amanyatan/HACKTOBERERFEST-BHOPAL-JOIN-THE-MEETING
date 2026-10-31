@@ -28,7 +28,7 @@ Anyone who has a `/sites/<id>/` link can open that site (the id is random and un
    | `SUPABASE_URL` | saving sites and deployments | **required** |
    | `SUPABASE_SERVICE_KEY` | same | **required**, mark Sensitive. Server only: it bypasses row-level security |
    | `GEMINI_API_KEY_BOT` | Cutu on the About page | optional: without it Cutu says it is unavailable |
-   | `GITHUB_TOKEN`, `VERCEL_TOKEN` | the Deploy feature | optional: classic GitHub token with `repo`, and a Vercel token |
+   | `GITHUB_TOKEN`, `DEPLOY_VERCEL_TOKEN` | the Deploy feature | optional: classic GitHub token with `repo`, and a Vercel token. **Not `VERCEL_TOKEN`:** Vercel reserves names that start with `VERCEL_`, so the dashboard greys the Value box out ("Populated by System") and you cannot set it. Names must use underscores, not hyphens |
    | `LIVE_MODEL`, `TEXT_MODEL`, `FALLBACK_MODEL`, `THINKING_LEVEL` | model tuning | optional, defaults are fine |
 
    Or copy them from `backend/.env` with the helper (dry run first; it prints names, never values):

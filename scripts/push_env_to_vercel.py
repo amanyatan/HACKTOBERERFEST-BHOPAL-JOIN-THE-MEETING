@@ -7,7 +7,8 @@ Secrets are stored as 'sensitive' variables (write-only: Vercel will not show th
     python scripts/push_env_to_vercel.py --project my-project --apply               # asks you to confirm
     python scripts/push_env_to_vercel.py --project my-project --team team_abc --apply --yes
 
-Needs VERCEL_TOKEN (in backend/.env or the environment) with access to the project.
+Needs a Vercel token with access to the project: DEPLOY_VERCEL_TOKEN, or the older VERCEL_TOKEN, in backend/.env or the environment.
+Vercel reserves names starting with VERCEL_, so the token is stored in the project as DEPLOY_VERCEL_TOKEN either way.
 """
 import argparse
 import os
@@ -20,15 +21,19 @@ from dotenv import dotenv_values
 ROOT = Path(__file__).resolve().parent.parent
 API = "https://api.vercel.com"
 REQUIRED = ["GEMINI_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]
-SECRETS = ["GEMINI_API_KEY", "GEMINI_API_KEY_BOT", "GITHUB_TOKEN", "VERCEL_TOKEN", "SUPABASE_SERVICE_KEY"]
+SECRETS = ["GEMINI_API_KEY", "GEMINI_API_KEY_BOT", "GITHUB_TOKEN", "DEPLOY_VERCEL_TOKEN", "SUPABASE_SERVICE_KEY"]
 PLAIN = ["SUPABASE_URL", "LIVE_MODEL", "TEXT_MODEL", "FALLBACK_MODEL", "THINKING_LEVEL"]
 NAMES = SECRETS + PLAIN  # SUPABASE_ANON_KEY is deliberately not sent: the app never uses it
+LEGACY = {"DEPLOY_VERCEL_TOKEN": "VERCEL_TOKEN"}  # the old local name; Vercel itself will not accept a VERCEL_* variable
 
 
 def collect(env_file: Path) -> dict[str, str]:
     """Values for NAMES from the .env file, with real environment variables taking priority. Empty values are skipped."""
     file_values = dotenv_values(env_file) if env_file.exists() else {}
     merged = {name: os.environ.get(name) or file_values.get(name) or "" for name in NAMES}
+    for new, old in LEGACY.items():
+        if not merged[new]:
+            merged[new] = os.environ.get(old) or file_values.get(old) or ""
     return {k: v.strip() for k, v in merged.items() if v and v.strip()}
 
 
@@ -67,15 +72,15 @@ def main(argv=None, client: httpx.Client | None = None, env_file: Path = ROOT / 
     if missing:
         print(f"\nMissing required settings: {', '.join(missing)}. Add them to backend/.env first.")
         return 2
-    optional_off = [n for n in ("GEMINI_API_KEY_BOT", "GITHUB_TOKEN", "VERCEL_TOKEN") if n not in values]
+    optional_off = [n for n in ("GEMINI_API_KEY_BOT", "GITHUB_TOKEN", "DEPLOY_VERCEL_TOKEN") if n not in values]
     if optional_off:
         print(f"\nNote: without {', '.join(optional_off)} the matching feature (Cutu / deploying from the app) will be switched off.")
     if not args.apply:
         print("\nDry run only. Nothing was sent. Re-run with --apply to send these.")
         return 0
-    token = values.get("VERCEL_TOKEN")
+    token = values.get("DEPLOY_VERCEL_TOKEN")
     if not token:
-        print("\nVERCEL_TOKEN is needed to talk to the Vercel API. Add it to backend/.env or the environment.")
+        print("\nDEPLOY_VERCEL_TOKEN (or the older VERCEL_TOKEN) is needed to talk to the Vercel API. Add it to backend/.env or the environment.")
         return 2
     if not args.yes and input(f"\nSend {len(values)} variables to Vercel project '{args.project}'? Type the project name to confirm: ").strip() != args.project:
         print("Cancelled. Nothing was sent.")
