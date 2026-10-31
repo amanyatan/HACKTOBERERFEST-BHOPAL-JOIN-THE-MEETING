@@ -26,6 +26,17 @@ const FLOW = {
 const KICKOFF = 'You are now speaking with the user. Introduce yourself briefly and ask your first question.';
 const LABEL = Object.fromEntries(Object.entries(FLOW).map(([k, v]) => [k, v.label]));
 
+// Changing a site you already built: the same four agents, but with revision personas. You pick who to start with and the
+// rest of the line follows (CEO -> Designer -> Developer -> Tester); the Tester then offers to push and redeploy.
+const REVISE = {
+  ceo: { persona: 'ceo_revise', label: 'CEO', tools: ['confirm_changes'], next: 'designer', up: 'Up next: design changes' },
+  designer: { persona: 'designer_revise', label: 'Designer', tools: ['confirm_design_changes'], next: 'developer', up: 'Up next: applying the changes' },
+  developer: { persona: 'developer_revise', label: 'Developer', tools: ['confirm_code_changes'], next: 'tester', up: 'Up next: test and deploy' },
+  tester: { persona: 'tester_revise', label: 'Tester', tools: ['confirm_redeploy', 'confirm_deploy', 'skip_deploy'], next: null },
+};
+const REVISE_KICKOFF = 'The user came back to change a website the team already built. Introduce yourself briefly and ask what they want to change.';
+let revising = null; // { siteId, title, brief, files, deployment, notes, entry } while a revision meeting is running
+
 // Characters from page-mascot (MIT): see THIRD_PARTY.md.
 const CHARACTER = { ceo: 'kamran', designer: 'ballerina', developer: 'scout', tester: 'cap' };
 const mascots = Object.fromEntries(Object.entries(CHARACTER).map(([agent, name]) => [
@@ -58,26 +69,34 @@ let context = '';
 let handoff = null;
 let building = null;
 let lastSite = null;
+let lastFollowError = '';
+
+const flowOf = (agent) => (revising ? REVISE[agent] : FLOW[agent]);
+const toolsOf = (f) => f.tools || [f.tool];
 
 async function runAgent(agent) {
-  const f = FLOW[agent];
+  const f = flowOf(agent);
   handoff = null;
   setAgent(agent, 'Connecting...');
+  const kickoff = revising ? (agent === revising.entry ? REVISE_KICKOFF : KICKOFF) : (agent === 'ceo' ? undefined : KICKOFF);
   try {
-    live = await startLive(agent, micStream, {
+    live = await startLive(f.persona || agent, micStream, {
       onSpeaking: (on) => { speaking = on; setAgent(agent, on ? 'Speaking' : 'Listening', on); },
       onUserText: (t) => caption('You', t),
       onAgentText: (t) => caption(f.label, t),
       onToolCall: (name, args) => {
-        if (name !== f.tool) return;
-        handoff = args;
-        context += `\n[${f.label}] ${args.summary || JSON.stringify(args)}`;
-        if (agent === 'developer') building = runBuild(context);
+        if (!toolsOf(f).includes(name)) return;
+        handoff = { name, args };
+        if (args.summary) {
+          context += `\n[${f.label}] ${args.summary}`;
+          if (revising) revising.notes.push(`[${f.label}] ${args.summary}`);
+        }
+        if (agent === 'developer') building = revising ? runRevisionBuild() : runBuild(context);
         if (f.next) setAgent(f.next, f.up);
       },
       onFarewellDone: () => finish(agent),
       onClose: () => !handoff && setAgent(agent, 'Disconnected'),
-    }, context, agent === 'ceo' ? undefined : KICKOFF);
+    }, context, kickoff);
   } catch (e) {
     setAgent(agent, 'Could not connect');
     console.error(e);
@@ -88,12 +107,12 @@ async function runAgent(agent) {
 function finish(agent) {
   if (!handoff) return;
   if (speaking) return void setTimeout(() => finish(agent), 300);
-  const f = FLOW[agent];
-  const args = handoff;
+  const f = flowOf(agent);
+  const { name, args } = handoff;
   live?.stop(); live = null;
   handoff = null;
   if (agent === 'developer') return void finishBuild();
-  if (agent === 'tester') return void showConfirm(args, lastSite?.id);
+  if (agent === 'tester') return void finishTester(name, args);
   setAgent(agent, 'Done');
   mascots[agent].react('delighted');
   runAgent(f.next);
@@ -132,21 +151,29 @@ async function follow(url, body, onEvent) {
     }
   } catch (err) {
     console.error(err);
+    lastFollowError = err.message;
   }
   return final;
 }
 
+const onBuildEvent = (e) => {
+  if (e.site && e.files && !e.final) { lastSite = e.site; showSite(e.site, e.files); }
+  if (e.screenshot) showShot(e.screenshot);
+};
 function runBuild(ctx) {
-  return follow('/api/build', { context: ctx }, (e) => {
-    if (e.site && e.files && !e.final) { lastSite = e.site; showSite(e.site, e.files); }
-    if (e.screenshot) showShot(e.screenshot);
-  });
+  return follow('/api/build', { context: ctx }, onBuildEvent);
+}
+// Same site id: the server loads the saved files, applies the changes, tests, and saves the new version.
+function runRevisionBuild() {
+  const notes = revising.notes.join('\n');
+  return follow('/api/build', { context: notes, site_id: revising.siteId, changes: notes }, onBuildEvent);
 }
 
 async function finishBuild() {
   const final = await building;
   if (!final || final.error) {
     setAgent('developer', 'Build failed');
+    $('captions').textContent = `Developer: ${final?.message || lastFollowError || 'the build failed'}`;
     return;
   }
   lastSite = final.site;
@@ -212,19 +239,58 @@ function showConfirm(args, siteId, onEvent) {
   };
 }
 
-function showResult(f) {
+function finishTester(name, args) {
+  if (name === 'skip_deploy') {
+    setAgent('tester', 'Changes saved, not deployed');
+    const back = el('button', 'Back to Your Code', { className: 'primary', onclick: () => { $('leave').click(); location.hash = '#/code'; } });
+    const row = el('div', '', { className: 'row' });
+    row.append(closeBtn(), back);
+    return showCard(el('h3', 'Changes saved'), el('p', 'Your updated site is saved in Your Code. You can deploy it any time from the Deploy page.'), row);
+  }
+  if (name === 'confirm_redeploy') return showRedeployConfirm();
+  return showConfirm(args, lastSite?.id); // confirm_deploy: a site that was never deployed gets the normal first deployment
+}
+
+// Nothing is pushed or redeployed until the user clicks the confirm button.
+function showRedeployConfirm() {
+  const d = revising?.deployment;
+  if (!d || !revising) return showResult({ error: true, message: 'This site has not been deployed before, so there is no repository to update.' }, true);
+  setAgent('tester', 'Waiting for your confirmation');
+  const go = el('button', 'Push and redeploy', { className: 'primary' });
+  const cancel = el('button', 'Cancel');
+  const row = el('div', '', { className: 'row' });
+  row.append(cancel, go);
+  showCard(
+    el('h3', 'Confirm redeploy'),
+    el('p', `Push these changes to the GitHub repository "${d.repo_name}" and redeploy it on Vercel?`),
+    ...(d.visibility === 'public' ? [el('p', 'This repository is public: the changes will be visible to anyone.', { className: 'warn' })] : []),
+    row,
+  );
+  cancel.onclick = () => { $('dialog').hidden = true; setAgent('tester', 'Redeploy cancelled'); };
+  go.onclick = async () => {
+    $('dialog').hidden = true;
+    const summary = revising.notes.map((n) => n.replace(/^\[[^\]]*\]\s*/, '')).join('; ').slice(0, 200);
+    const final = await follow('/api/redeploy', { site_id: revising.siteId, summary, confirmed: true });
+    showResult(final, true);
+    if (final && !final.error) revising.deployment = { ...d, live_url: final.live_url, repo_url: final.repo_url };
+  };
+}
+
+function showResult(f, again = false) {
   const close = el('button', 'Close', { onclick: () => ($('dialog').hidden = true) });
   if (!f || f.error) {
-    showCard(el('h3', 'Deployment failed'), el('p', f?.message || 'Something went wrong.'), close);
+    showCard(el('h3', again ? 'Redeploy failed' : 'Deployment failed'), el('p', f?.message || 'Something went wrong.'), close);
     return;
   }
   const link = (label, url, prefix) => (url.startsWith(prefix)
     ? el('a', `${label}: ${url}`, { href: url, target: '_blank', rel: 'noopener' })
     : el('p', `${label}: (unexpected URL)`));
   showCard(
-    el('h3', 'Your site is live'),
+    el('h3', again ? 'Your changes are live' : 'Your site is live'),
     link('Live site', f.live_url, 'https://'),
     link('GitHub repo', f.repo_url, 'https://github.com/'),
+    ...(f.commit_url && f.commit_url.startsWith('https://github.com/') ? [link('Commit', f.commit_url, 'https://github.com/')] : []),
+    ...(again && f.changed === false ? [el('p', 'GitHub already had exactly these files, so no new commit was needed.')] : []),
     ...(f.warning ? [el('p', f.warning, { className: 'warn' })] : []),
     ...(f.saved === false ? [el('p', 'This deployment could not be saved to your history.', { className: 'warn' })] : []),
     close,
@@ -238,30 +304,46 @@ function caption(who, text) {
   c.textContent += text;
 }
 
-$('join').onclick = async () => {
-  stopCutu();
-  $('error').hidden = true;
+async function getMic() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    return true;
   } catch {
-    $('error').textContent = 'Microphone access is needed to talk to the team. Allow it in your browser and try again.';
-    $('error').hidden = false;
-    return;
+    return false;
   }
+}
+
+function openRoom() {
   $('landing').hidden = true;
   wave.stop();
   $('room').hidden = false;
   context = '';
   building = null;
   lastSite = null;
+  revising = null;
+  for (const agent of Object.keys(CHARACTER)) setAgent(agent, 'Waiting'); // nothing left over from an earlier meeting
+  $('captions').textContent = '';
+  lastWho = '';
   $('work').hidden = true;
   $('tab-tester').hidden = true;
   $('dialog').hidden = true;
+}
+
+$('join').onclick = async () => {
+  stopCutu();
+  $('error').hidden = true;
+  if (!(await getMic())) {
+    $('error').textContent = 'Microphone access is needed to talk to the team. Allow it in your browser and try again.';
+    $('error').hidden = false;
+    return;
+  }
+  openRoom();
   runAgent('ceo');
 };
 
 $('leave').onclick = () => {
   handoff = null;
+  revising = null;
   live?.stop(); live = null;
   micStream?.getTracks().forEach((t) => t.stop());
   micStream = null;
@@ -269,6 +351,8 @@ $('leave').onclick = () => {
   $('room').hidden = true;
   $('landing').hidden = false;
   wave.start();
+  if (!$('view-code').hidden) loadCode(); // a change you just made should show up in the list
+  if (!$('view-deploy').hidden) loadDeploy();
 };
 
 // ---- Anonymous client id: scopes the saved sites and deployments to this browser (no accounts) ----
@@ -303,6 +387,7 @@ function siteCard(s) {
   info.append(el('h3', s.title), meta);
   const actions = el('div', '', { className: 'actions' });
   actions.append(
+    el('button', 'Make changes', { className: 'btn-ghost accent', onclick: () => chooseAgent(s) }),
     el('button', 'View code', { className: 'btn-ghost', onclick: () => viewCode(s.site_id) }),
     el('button', 'Preview', { className: 'btn-ghost', onclick: () => previewSite(s.site_id) }),
     el('button', 'Deploy', { className: 'btn-ghost', onclick: () => { pendingSite = s.site_id; location.hash = '#/deploy'; } }),
@@ -402,6 +487,52 @@ $('deploy-form').onsubmit = (e) => {
   status.textContent = '';
   showConfirm({ repo_name: repo, visibility: $('deploy-vis').value }, site, (ev) => { status.textContent = `${ev.status}${ev.message ? ': ' + ev.message : ''}`; });
 };
+
+// ---- Make changes: choose who to talk to, then the agents continue down the line with that site ----
+const REVISE_CHOICES = [
+  ['ceo', 'Talk to the CEO', 'New or bigger changes. The CEO writes them down, then the Designer, Developer and Tester carry on.'],
+  ['designer', 'Talk to the Designer', 'Look and feel: colours, fonts, layout. Then the Developer applies it and the Tester checks it.'],
+  ['developer', 'Talk to the Developer', 'Code or behaviour changes. The Developer applies them and the Tester checks it.'],
+];
+
+function chooseAgent(site) {
+  const choices = REVISE_CHOICES.map(([agent, title, text]) => {
+    const b = el('button', '', { className: 'choice', onclick: () => startRevision(site.site_id, agent) });
+    b.append(el('strong', title), el('span', text));
+    return b;
+  });
+  showCard(el('h3', 'Who should handle your changes?'), el('p', site.title, { className: 'choice-site' }), ...choices, el('div', '', { className: 'row' }));
+  $('card').lastChild.append(el('button', 'Cancel', { onclick: () => ($('dialog').hidden = true) }));
+}
+
+function reviseContext(r) {
+  const d = r.deployment;
+  return [
+    `[Existing site] "${r.title}" with the files: ${r.files.map((f) => f.path).join(', ')}`,
+    r.brief ? `[Original brief] ${r.brief.slice(0, 800)}` : '',
+    d ? `[Deployed before] yes, repository ${d.repo_name} (${d.visibility}), live at ${d.live_url}` : '[Deployed before] no, it was never deployed',
+  ].filter(Boolean).join('\n');
+}
+
+async function startRevision(siteId, entry) {
+  stopCutu();
+  $('dialog').hidden = true;
+  let site;
+  try {
+    site = await api(`/api/sites/${siteId}`);
+  } catch (e) {
+    return showCard(el('h3', 'Could not open that site'), el('p', e.message), closeBtn());
+  }
+  if (!(await getMic())) {
+    return showCard(el('h3', 'Microphone needed'), el('p', 'Allow the microphone in your browser, then press Make changes again.'), closeBtn());
+  }
+  openRoom();
+  revising = { siteId, title: site.title, brief: site.brief || '', files: site.files, deployment: site.deployment, notes: [], entry };
+  lastSite = { id: siteId, url: `/sites/${siteId}/` };
+  showSite(lastSite, site.files);
+  context = reviseContext(revising);
+  runAgent(entry);
+}
 
 // ---- Cutu: the guide bot on the About page. Voice only, with its own Gemini key on the server. ----
 const cutuMascot = mountMascot($('cutu-avatar'), { name: 'cube', label: 'Cutu' });

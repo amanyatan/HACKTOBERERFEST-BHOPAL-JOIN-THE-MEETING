@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 import db
 from agents import developer, tester
-from deploy_flow import deploy_site
+from deploy_flow import deploy_site, redeploy_site
 from orchestrator import build_and_test
 from personas import PERSONAS, live_config
 from tools import github_push, vercel_deploy
@@ -218,6 +218,31 @@ def sse(events, agent: str, fail_status: str) -> StreamingResponse:
 
 class BuildReq(BaseModel):
     context: str
+    site_id: str = ""  # set to change a site you already built, instead of building a new one
+    changes: str = ""  # what to change (only with site_id)
+
+
+def _load_for_revision(site_id: str, cid: str) -> tuple[list[dict], str]:
+    """Files and brief of a saved site the caller owns, or an HTTP error. Without a database (local use) the folder is the source."""
+    if db.configured():
+        if not cid:
+            raise HTTPException(400, "Missing client id")
+        try:
+            rows = db.select("sites", {"select": "files,brief", "client_id": f"eq.{cid}", "site_id": f"eq.{site_id}", "limit": "1"})
+        except db.DbError:
+            raise HTTPException(502, "Could not load the site")
+        if not rows:
+            raise HTTPException(404, "Unknown site")
+        files, brief = rows[0]["files"], rows[0].get("brief") or ""
+    else:
+        root = _ensure_site(site_id)
+        if root is None:
+            raise HTTPException(404, "Unknown site")
+        files, brief = _read_site(root), ""
+    try:
+        return validate(files), brief
+    except InvalidFiles as e:
+        raise HTTPException(422, f"Saved files rejected: {e}")
 
 
 @app.post("/api/build")
@@ -225,9 +250,23 @@ def build(request: Request, req: BuildReq, x_client_id: str = Header(default="")
     rate_limit(_ip(request), limit=5, bucket="build")
     if not os.getenv("GEMINI_API_KEY"):
         raise HTTPException(503, "GEMINI_API_KEY is not set")
-    site_id = secrets.token_urlsafe(8).lower().replace("_", "x").replace("-", "y")
-    base = str(request.base_url).rstrip("/")
     cid = _cid(x_client_id)
+    revise_of = req.site_id.strip().lower()
+    if revise_of:
+        if not SITE_ID_RE.match(revise_of):
+            raise HTTPException(404, "Unknown site")
+        changes = req.changes.strip()[:3000]
+        if not changes:
+            raise HTTPException(400, "Say what to change")
+        previous, old_brief = _load_for_revision(revise_of, cid)  # also proves the caller owns the site
+        site_id, first = revise_of, ("revise", changes, previous)
+        context = f"{old_brief}\n{req.context}".strip()
+        brief = context[-4000:]
+    else:
+        site_id = secrets.token_urlsafe(8).lower().replace("_", "x").replace("-", "y")
+        first, context = ("build", "", None), req.context
+        brief = req.context[:4000]
+    base = str(request.base_url).rstrip("/")
 
     def save(files):
         write_files(SITES / site_id, files)
@@ -237,7 +276,7 @@ def build(request: Request, req: BuildReq, x_client_id: str = Header(default="")
             # land on another serverless instance, which can only get the files from the database.
             try:
                 db.upsert("sites", {"client_id": cid or ANON_CLIENT, "site_id": site_id, "title": _title(files),
-                                    "brief": req.context[:4000], "files": files}, "site_id")
+                                    "brief": brief, "files": files}, "site_id")
             except db.DbError:
                 pass
         return {"id": site_id, "url": f"/sites/{site_id}/"}
@@ -246,18 +285,19 @@ def build(request: Request, req: BuildReq, x_client_id: str = Header(default="")
         if not cid or not db.configured():
             return False
         try:
-            db.upsert("sites", {"client_id": cid, "site_id": site_id, "title": _title(e["files"]), "brief": req.context[:4000],
+            db.upsert("sites", {"client_id": cid, "site_id": site_id, "title": _title(e["files"]), "brief": brief,
                                 "files": e["files"], "passed": e["passed"], "issues": e["issues"], "rounds": e["rounds"]}, "site_id")
             return True
         except db.DbError:
             return False
 
     events = build_and_test(
-        req.context,
-        lambda ctx, fb, prev: developer.build(ctx, fb, prev),
+        context,
+        lambda ctx, fb, prev, kind: developer.build(ctx, fb, prev, kind=kind),
         save,
         lambda url: run_playwright_check(base + url),
         lambda ctx, files, report: tester.review(ctx, files, report),
+        first_kind=first[0], first_feedback=first[1], first_previous=first[2],
     )
     return sse(_with_save(events, persist), "developer", "Build failed")
 
@@ -316,6 +356,62 @@ def deploy(request: Request, req: DeployReq, x_client_id: str = Header(default="
     return sse(_with_save(run(), persist), "tester", "Deploy failed")
 
 
+class RedeployReq(BaseModel):
+    site_id: str
+    summary: str = ""
+    confirmed: bool = False
+
+
+@app.post("/api/redeploy")
+def redeploy(request: Request, req: RedeployReq, x_client_id: str = Header(default="")):
+    """Push a changed site to the GitHub repo it was deployed to, then redeploy it on Vercel."""
+    rate_limit(_ip(request), limit=3, bucket="deploy")
+    if not req.confirmed:
+        raise HTTPException(400, "Redeploying must be confirmed by the user")
+    cid = _cid(x_client_id)
+    if not SITE_ID_RE.match(req.site_id):
+        raise HTTPException(404, "Unknown site")
+    rows = _db_call(lambda c: db.select("deployments", {"select": "repo_name,repo_url,visibility", "client_id": f"eq.{c}", "site_id": f"eq.{req.site_id}",
+                                                        "order": "created_at.desc", "limit": "1"}), x_client_id)
+    if not rows:
+        raise HTTPException(404, "This site has not been deployed yet, so there is no repository to update")
+    last = rows[0]
+    try:
+        owner, repo = github_push.parse_repo_url(last["repo_url"])
+    except github_push.DeployError as e:
+        raise HTTPException(422, str(e))
+    gh, vc = os.getenv("GITHUB_TOKEN"), _vercel_token()
+    if not gh or not vc:
+        raise HTTPException(503, "GITHUB_TOKEN and DEPLOY_VERCEL_TOKEN are not set")
+    root = _ensure_site(req.site_id)
+    if root is None:
+        raise HTTPException(404, "Unknown site")
+    try:
+        files = _read_site(root)
+    except (InvalidFiles, UnicodeDecodeError) as e:
+        raise HTTPException(422, f"Site files rejected: {e}")
+    message = "Update site: " + (" ".join(req.summary.split()) or "changes made in a meeting")[:120]
+
+    def run():
+        with httpx.Client(timeout=30) as c:
+            yield from redeploy_site(
+                files, owner, repo, message,
+                lambda o, r, f, m: github_push.update_repo(c, gh, o, r, f, m),
+                lambda n, f: vercel_deploy.deploy(c, vc, n, f),
+                lambda url: c.get(url, follow_redirects=True).status_code,
+            )
+
+    def persist(e):
+        try:
+            db.insert("deployments", {"client_id": cid, "site_id": req.site_id, "repo_name": last["repo_name"], "visibility": last["visibility"],
+                                      "repo_url": e["repo_url"], "live_url": e["live_url"]})
+            return True
+        except db.DbError:
+            return False
+
+    return sse(_with_save(run(), persist), "tester", "Redeploy failed")
+
+
 @app.get("/api/sites")
 def list_sites(request: Request, x_client_id: str = Header(default="")):
     rate_limit(_ip(request), limit=30, bucket="read")
@@ -329,8 +425,14 @@ def get_site(site_id: str, request: Request, x_client_id: str = Header(default="
     rate_limit(_ip(request), limit=30, bucket="read")
     if not SITE_ID_RE.match(site_id):
         raise HTTPException(404, "Unknown site")
-    rows = _db_call(lambda cid: db.select("sites", {"select": "site_id,title,files,passed,issues,rounds,created_at", "client_id": f"eq.{cid}",
-                                                    "site_id": f"eq.{site_id}", "limit": "1"}), x_client_id)
+    def fetch(cid):
+        found = db.select("sites", {"select": "site_id,title,brief,files,passed,issues,rounds,created_at", "client_id": f"eq.{cid}",
+                                    "site_id": f"eq.{site_id}", "limit": "1"})
+        last = db.select("deployments", {"select": "repo_name,repo_url,live_url,visibility", "client_id": f"eq.{cid}", "site_id": f"eq.{site_id}",
+                                         "order": "created_at.desc", "limit": "1"}) if found else []
+        return found, (last[0] if last else None)
+
+    rows, deployment = _db_call(fetch, x_client_id)
     if not rows:
         raise HTTPException(404, "Unknown site")
     if not (SITES / site_id).is_dir():
@@ -338,7 +440,7 @@ def get_site(site_id: str, request: Request, x_client_id: str = Header(default="
             write_files(SITES / site_id, rows[0]["files"])
         except InvalidFiles as e:
             raise HTTPException(422, f"Saved files rejected: {e}")
-    return rows[0]
+    return {**rows[0], "deployment": deployment}  # deployment: where this site was last published, or null
 
 
 @app.get("/api/deployments")

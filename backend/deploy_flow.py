@@ -28,3 +28,27 @@ def deploy_site(files, repo_name, private, gh_create, gh_push, vercel, probe):
     except Exception:
         warning = "Could not check whether the live URL is publicly reachable."
     yield _ev("Live", live_url, final=True, repo_url=repo_url, live_url=live_url, warning=warning)
+
+
+def redeploy_site(files, owner, repo, message, gh_update, vercel, probe):
+    """Push the changed files to the site's existing repo, then redeploy it on Vercel. gh_update(owner,repo,files,message)->
+    {'changed','commit_url'}; vercel(name,files)->url. Only called after the user confirmed on screen."""
+    repo_url = f"https://github.com/{owner}/{repo}"
+    try:
+        yield _ev("Pushing your changes", f"Updating {owner}/{repo} on GitHub")
+        pushed = gh_update(owner, repo, files, message)
+        if not pushed["changed"]:
+            yield _ev("Nothing new to push", "GitHub already has exactly these files", repo_url=repo_url)
+        yield _ev("Redeploying to Vercel", "Uploading the files and waiting for the build")
+        live_url = vercel(repo, files)
+    except DeployError as e:
+        yield _ev("Redeploy failed", str(e), final=True, error=True)
+        return
+    warning = ""
+    try:
+        if probe(live_url) in (401, 403):
+            warning = "Vercel Deployment Protection is on, so visitors may be asked to log in. Turn it off in the Vercel project settings."
+    except Exception:
+        warning = "Could not check whether the live URL is publicly reachable."
+    yield _ev("Live", live_url, final=True, repo_url=repo_url, live_url=live_url, commit_url=pushed.get("commit_url"),
+              changed=pushed["changed"], warning=warning)

@@ -37,14 +37,19 @@ SCHEMA = {
 }
 
 
-def build(context: str, feedback: str = "", previous: list[dict] | None = None, client=None, model: str = "") -> list[dict]:
-    """Return a list of {path, content}. `client` is injectable for tests."""
+def build(context: str, feedback: str = "", previous: list[dict] | None = None, client=None, model: str = "", kind: str = "fix") -> list[dict]:
+    """Return a list of {path, content}. kind="revise": the user asked for changes to an existing site; "fix": the tester found
+    problems. `client` is injectable for tests."""
     client = client or genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     prompt = f"BRIEF:\n{context[:6000]}"
     if feedback:
-        prompt += f"\n\nFix these problems found by the tester:\n{feedback[:2000]}"
+        if kind == "revise":
+            prompt += ("\n\nThe user asked for these changes to their EXISTING website. Apply them, keep everything else exactly as it is, "
+                       f"and keep the same file names unless a change needs otherwise:\n{feedback[:3000]}")
+        else:
+            prompt += f"\n\nFix these problems found by the tester:\n{feedback[:2000]}"
         if previous:
-            prompt += f"\n\nCURRENT FILES (return the full corrected set):\n{json.dumps(previous)[:40000]}"
+            prompt += f"\n\nCURRENT FILES (return the full {'updated' if kind == 'revise' else 'corrected'} set):\n{json.dumps(previous)[:40000]}"
     cfg = types.GenerateContentConfig(
         system_instruction=SYSTEM, thinking_config=THINKING, response_mime_type="application/json", response_schema=SCHEMA,
         http_options=types.HttpOptions(timeout=90_000),

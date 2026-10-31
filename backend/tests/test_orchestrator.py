@@ -11,7 +11,7 @@ REPORT = {"screenshot": b"png", "console_errors": [], "failed_requests": []}
 def run(verdicts):
     calls = []
 
-    def dev(ctx, feedback, previous):
+    def dev(ctx, feedback, previous, kind="build"):
         calls.append((feedback, previous))
         return FILES
 
@@ -39,7 +39,7 @@ def test_a_host_without_a_browser_still_finishes_the_build_and_says_it_was_not_t
     def no_browser(url):
         raise RuntimeError("Browser testing is not available on this host")
 
-    events = list(build_and_test("brief", lambda c, f, p: FILES, lambda f: {"id": "a", "url": "/sites/a/"}, no_browser, lambda c, f, r: 1 / 0))
+    events = list(build_and_test("brief", lambda c, f, p, k: FILES, lambda f: {"id": "a", "url": "/sites/a/"}, no_browser, lambda c, f, r: 1 / 0))
     assert events[-1]["final"] and events[-1]["passed"] is None and events[-1]["status"] == "Not verified"
     assert any(e["status"] == "Test skipped" for e in events)
 

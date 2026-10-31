@@ -18,7 +18,7 @@ def _events(r):
 
 def _ready(monkeypatch, files):
     monkeypatch.setenv("GEMINI_API_KEY", "x")
-    monkeypatch.setattr(main.developer, "build", lambda ctx, fb, prev: files)
+    monkeypatch.setattr(main.developer, "build", lambda ctx, fb, prev, kind="build": files)
     monkeypatch.setattr(main, "run_playwright_check", lambda url: REPORT)
     monkeypatch.setattr(main.tester, "review", lambda ctx, f, r: OK)
     main._hits.clear()

@@ -145,13 +145,6 @@ main { padding-top: calc(92px + 2vh); }
 #card select { background: #0b0d14; color: #eee; border: 1px solid rgba(255, 255, 255, .2); border-radius: 8px; padding: 6px 10px; }
 
 @media (max-width: 600px) {
-  #landing .nav { top: 8px; width: calc(100% - 16px); padding: 6px 6px 6px 8px; gap: 4px; }
-  .nav .logo-mark { width: 36px; height: 36px; }
-  .logo-text, .d-only { display: none; }
-  .m-only { display: inline; }
-  .links { gap: 0; }
-  .links a { padding: 8px 9px; font-size: .84rem; }
-  .nav .btn-join { padding: 9px 16px; }
   .page { padding-top: 84px; }
 }
 @media (prefers-reduced-motion: reduce) { .links a { transition: none; } }
@@ -180,3 +173,89 @@ main { padding-top: calc(92px + 2vh); }
 .links.fluid a:hover, .links.fluid a.active { background: transparent; box-shadow: none; }
 .links.fluid a.active { color: #0b2540; }
 .links.fluid a.active::after { content: ''; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: #1a73e8; }
+
+/* ---- Responsive fixes (from a width audit of every screen, 320px to 1280px) ---- */
+.links a, .btn-join, .logo { white-space: nowrap; }
+.logo, .nav .btn-join { flex: 0 0 auto; }
+@media (max-width: 860px) {  /* the full navbar needs about 745px, so step down early */
+  .logo-text { display: none; }
+}
+@media (max-width: 680px) {
+  #landing .nav { top: 8px; width: calc(100% - 16px); padding: 6px 6px 6px 8px; gap: 4px; }
+  .nav .logo-mark { width: 36px; height: 36px; }
+  .d-only { display: none; }
+  .m-only { display: inline; }
+  .links { gap: 0; }
+  .links a { padding: 8px 9px; font-size: .84rem; }
+  .nav .btn-join { padding: 9px 16px; }
+}
+@media (max-width: 380px) {  /* very small phones: logo, four links and Join must still fit in 320px */
+  #landing .nav { width: calc(100% - 12px); padding: 5px 5px 5px 6px; gap: 2px; }
+  .nav .logo-mark { width: 30px; height: 30px; }
+  .links a { padding: 7px 6px; font-size: .76rem; }
+  .nav .btn-join { padding: 8px 12px; font-size: .84rem; }
+  .hero-mascots { gap: 2px; }
+  .hero-avatar { width: 68px; height: 68px; }
+  .chip { font-size: .62rem; padding: 2px 7px; }
+}
+/* Deploy form: a long site title in the dropdown must not stretch the form wider than the screen */
+.form { width: 100%; grid-template-columns: minmax(0, 1fr); }
+.form label, .form input, .form select { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.form select { text-overflow: ellipsis; }
+#open { padding: 8px 4px; }  /* a bigger tap target */
+
+/* ---- Make changes: choosing who to talk to ---- */
+.btn-ghost.accent { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+.btn-ghost.accent:hover { background: #1765cc; }
+#card .choice-site { color: #9aa3bd; margin: 0 0 4px; word-break: break-word; }
+#card .choice { display: grid; gap: 2px; width: 100%; text-align: left; margin-top: 8px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .16); color: #fff; }
+#card .choice:hover, #card .choice:focus-visible { background: rgba(255, 255, 255, .16); }
+#card .choice strong { font-size: 1rem; }
+#card .choice span { font-size: .85rem; color: #b8c0d8; }
+
+/* ---- Dropdowns ----
+   The list a normal <select> opens is drawn by the operating system, so CSS cannot style it. Browsers with customizable
+   selects (Chrome and Edge 135+) can, so there it gets the glass look; every other browser keeps its normal dropdown. */
+@supports (appearance: base-select) {
+  .form select, #card select, #file { appearance: base-select; display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; text-align: left; }
+  .form select { --dd-bg: rgba(255, 255, 255, .86); --dd-fg: #0f2438; --dd-border: rgba(255, 255, 255, .95); --dd-hover: rgba(26, 115, 232, .13);
+    --dd-sel-bg: #1a73e8; --dd-sel-fg: #fff; --dd-shadow: 0 18px 44px rgba(15, 60, 110, .3); }
+  #card select, #file { --dd-bg: rgba(21, 25, 39, .97); --dd-fg: #eceffa; --dd-border: rgba(255, 255, 255, .18); --dd-hover: rgba(255, 255, 255, .1);
+    --dd-sel-bg: #1a73e8; --dd-sel-fg: #fff; --dd-shadow: 0 18px 44px rgba(0, 0, 0, .5); }
+  .form select selectedcontent, #card select selectedcontent, #file selectedcontent { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .form select::picker-icon, #card select::picker-icon, #file::picker-icon { content: ''; flex: none; width: .5em; height: .5em; border: solid currentColor;
+    border-width: 0 2px 2px 0; rotate: 45deg; translate: 0 -2px; transition: rotate .2s ease, translate .2s ease; }
+  .form select:open::picker-icon, #card select:open::picker-icon, #file:open::picker-icon { rotate: 225deg; translate: 0 2px; }
+  #card select, #file { display: inline-flex; min-width: 12rem; max-width: 100%; }  /* the small file pickers stay compact */
+
+  .form select::picker(select),
+  #card select::picker(select),
+  #file::picker(select) {
+    appearance: base-select; background: var(--dd-bg); color: var(--dd-fg); border: 1px solid var(--dd-border); border-radius: 16px; padding: 6px;
+    box-shadow: var(--dd-shadow); -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+    margin-block: 6px; width: anchor-size(width); min-width: 0; max-width: 92vw; max-height: min(60vh, 320px);
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity .16s ease, transform .16s ease, overlay .16s allow-discrete, display .16s allow-discrete;
+  }
+  .form select::picker(select):popover-open,
+  #card select::picker(select):popover-open,
+  #file::picker(select):popover-open { opacity: 1; transform: none; }
+  @starting-style {
+    .form select::picker(select):popover-open,
+  #card select::picker(select):popover-open,
+  #file::picker(select):popover-open { opacity: 0; transform: translateY(-6px); }
+  }
+
+  .form select option,
+  #card select option,
+  #file option {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: transparent; color: var(--dd-fg);
+    font: inherit; font-weight: 500; line-height: 1.35; white-space: normal; cursor: pointer;
+  }
+  .form select option:hover, .form select option:focus-visible, #card select option:hover, #card select option:focus-visible, #file option:hover, #file option:focus-visible { background: var(--dd-hover); outline: none; }
+  .form select option:checked, #card select option:checked, #file option:checked { background: var(--dd-sel-bg); color: var(--dd-sel-fg); }
+  .form select option::checkmark, #card select option::checkmark, #file option::checkmark { order: 1; margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .form select::picker(select), #card select::picker(select), #file::picker(select) { transition: none; }
+}

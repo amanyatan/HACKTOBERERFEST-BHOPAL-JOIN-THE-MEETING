@@ -30,7 +30,7 @@ def events(r):
 
 def fake_build(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "x")
-    monkeypatch.setattr(main.developer, "build", lambda ctx, fb, prev: FILES)
+    monkeypatch.setattr(main.developer, "build", lambda ctx, fb, prev, kind="build": FILES)
     monkeypatch.setattr(main, "run_playwright_check", lambda url: REPORT)
     monkeypatch.setattr(main.tester, "review", lambda ctx, f, r: {"ok": True, "issues": [], "summary": "fine"})
 

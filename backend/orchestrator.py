@@ -10,10 +10,12 @@ def _ev(agent, status, message="", **extra):
     return {"agent": agent, "status": status, "message": message, **extra}
 
 
-def build_and_test(context, dev_build, save, check, review):
-    """dev_build(context, feedback, previous)->files; save(files)->{'id','url'}; check(url)->report; review(context, files, report)->verdict."""
-    yield _ev("developer", "Writing code", "Building the site from the brief")
-    files = dev_build(context, "", None)
+def build_and_test(context, dev_build, save, check, review, first_kind="build", first_feedback="", first_previous=None):
+    """dev_build(context, feedback, previous, kind)->files, kind being "build", "revise" (the user's changes) or "fix" (the tester's); save(files)->{'id','url'}; check(url)->report; review(context, files, report)->verdict."""
+    revising = first_kind == "revise"
+    yield _ev("developer", "Applying your changes" if revising else "Writing code",
+              "Changing the existing site" if revising else "Building the site from the brief")
+    files = dev_build(context, first_feedback, first_previous, first_kind)
     rounds = 0
     while True:
         site = save(files)
@@ -37,7 +39,7 @@ def build_and_test(context, dev_build, save, check, review):
         rounds += 1
         yield _ev("tester", f"Found {len(verdict['issues'])} issues", "; ".join(verdict["issues"]), issues=verdict["issues"])
         yield _ev("developer", f"Fixing (round {rounds} of {MAX_FIX_ROUNDS})", "Applying the tester's feedback")
-        files = dev_build(context, "\n".join(verdict["issues"]), files)
+        files = dev_build(context, "\n".join(verdict["issues"]), files, "fix")
     status = "Passed" if verdict["ok"] else ("Not verified" if verdict["ok"] is None else f"{len(verdict['issues'])} issues left")
     yield _ev("tester", status, verdict["summary"], final=True, site=site, files=files,
               issues=verdict["issues"], rounds=rounds, passed=verdict["ok"])
