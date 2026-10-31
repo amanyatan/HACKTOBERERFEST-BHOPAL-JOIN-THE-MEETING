@@ -1,4 +1,5 @@
 import { startLive } from './live.js';
+import { mountMascot } from './mascot.js';
 
 const $ = (id) => document.getElementById(id);
 let micStream = null;
@@ -21,6 +22,13 @@ const FLOW = {
 };
 const KICKOFF = 'You are now speaking with the user. Introduce yourself briefly and ask your first question.';
 const LABEL = Object.fromEntries(Object.entries(FLOW).map(([k, v]) => [k, v.label]));
+
+// Characters from page-mascot (MIT): see THIRD_PARTY.md.
+const CHARACTER = { ceo: 'kamran', designer: 'ballerina', developer: 'scout', tester: 'cap' };
+const mascots = Object.fromEntries(Object.entries(CHARACTER).map(([agent, name]) => [
+  agent,
+  mountMascot(document.querySelector(`.tile[data-agent="${agent}"] .avatar`), { name, label: LABEL[agent] }),
+]));
 
 let context = '';
 let handoff = null;
@@ -63,6 +71,7 @@ function finish(agent) {
   if (agent === 'developer') return void finishBuild();
   if (agent === 'tester') return void showConfirm(args);
   setAgent(agent, 'Done');
+  mascots[agent].react('delighted');
   runAgent(f.next);
 }
 
